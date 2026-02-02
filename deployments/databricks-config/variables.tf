@@ -74,6 +74,17 @@ variable "keyvault_resource_group_name" {
 }
 
 # ---------------------------------------------------------------------------------------------------------------------
+# DEFAULTS CONFIGURATION
+# Override module defaults - see module's defaults.tf for available options
+# ---------------------------------------------------------------------------------------------------------------------
+
+variable "defaults" {
+  description = "Override module defaults (group permissions, catalog isolation mode, etc.)"
+  type        = any
+  default     = {}
+}
+
+# ---------------------------------------------------------------------------------------------------------------------
 # ENTRA ID GROUPS
 # Maps Azure AD group display names to object IDs (avoids azuread provider)
 # ---------------------------------------------------------------------------------------------------------------------
@@ -85,174 +96,57 @@ variable "entra_id_groups" {
 }
 
 # ---------------------------------------------------------------------------------------------------------------------
-# GROUPS
+# MODULE PASSTHROUGH VARIABLES
+# These use 'any' type to avoid duplicating complex type definitions from the module.
+# Validation is handled at the module level.
 # ---------------------------------------------------------------------------------------------------------------------
 
 variable "groups" {
-  description = "Map of Databricks groups to create"
-  type = map(object({
-    display_name               = string
-    allow_cluster_create       = optional(bool, false)
-    allow_instance_pool_create = optional(bool, false)
-    databricks_sql_access      = optional(bool, false)
-    workspace_access           = optional(bool, true)
-    members                    = optional(list(string), [])
-    service_principals         = optional(list(string), [])
-    child_groups               = optional(list(string), [])
-    entra_id_groups            = optional(list(string), [])
-  }))
-  default = {}
+  description = "Map of Databricks groups to create. See module for schema."
+  type        = any
+  default     = {}
 }
-
-# ---------------------------------------------------------------------------------------------------------------------
-# STORAGE CREDENTIALS
-# ---------------------------------------------------------------------------------------------------------------------
 
 variable "storage_credentials" {
-  description = "Map of storage credentials to create"
-  type = map(object({
-    comment                   = optional(string)
-    owner                     = optional(string)
-    azure_managed_identity_id = optional(string)
-    grants = optional(list(object({
-      principal  = string
-      privileges = list(string)
-    })), [])
-  }))
-  default = {}
+  description = "Map of storage credentials to create. See module for schema."
+  type        = any
+  default     = {}
 }
-
-# ---------------------------------------------------------------------------------------------------------------------
-# EXTERNAL LOCATIONS
-# ---------------------------------------------------------------------------------------------------------------------
 
 variable "external_locations" {
-  description = "Map of external locations to create, with optional EXTERNAL volume creation"
-  type = map(object({
-    url             = string
-    credential_name = optional(string)
-    skip_validation = optional(bool, false)
-    read_only       = optional(bool, false)
-    comment         = optional(string)
-    owner           = optional(string)
-    grants = optional(list(object({
-      principal  = string
-      privileges = list(string)
-    })), [])
-    # Optional: Create an EXTERNAL volume at this location
-    volume = optional(object({
-      catalog_name = string
-      schema_name  = string
-      name         = optional(string) # Defaults to external location key
-      subpath      = optional(string) # Subpath under the location URL
-      comment      = optional(string)
-      owner        = optional(string)
-      grants = optional(list(object({
-        principal  = string
-        privileges = list(string)
-      })), [])
-    }))
-  }))
-  default = {}
+  description = "Map of external locations to create, with optional EXTERNAL volume creation. See module for schema."
+  type        = any
+  default     = {}
 }
-
-# ---------------------------------------------------------------------------------------------------------------------
-# CATALOGS AND SCHEMAS
-# ---------------------------------------------------------------------------------------------------------------------
 
 variable "catalogs" {
-  description = "Map of catalogs to create"
-  type = map(object({
-    comment        = optional(string)
-    owner          = optional(string)
-    storage_root   = optional(string)
-    isolation_mode = optional(string, "OPEN")
-    grants = optional(list(object({
-      principal  = string
-      privileges = list(string)
-    })), [])
-    schemas = optional(map(object({
-      comment      = optional(string)
-      owner        = optional(string)
-      storage_root = optional(string)
-      grants = optional(list(object({
-        principal  = string
-        privileges = list(string)
-      })), [])
-    })), {})
-  }))
-  default = {}
+  description = "Map of catalogs to create with nested schemas. See module for schema."
+  type        = any
+  default     = {}
 }
-
-# ---------------------------------------------------------------------------------------------------------------------
-# VOLUMES (MANAGED only - use external_locations.volume for EXTERNAL volumes)
-# ---------------------------------------------------------------------------------------------------------------------
 
 variable "volumes" {
-  description = "Map of MANAGED volumes to create. For EXTERNAL volumes, use the 'volume' block in external_locations instead."
-  type = map(object({
-    catalog_name = string
-    schema_name  = string
-    comment      = optional(string)
-    owner        = optional(string)
-    grants = optional(list(object({
-      principal  = string
-      privileges = list(string)
-    })), [])
-  }))
-  default = {}
+  description = "Map of MANAGED volumes to create. For EXTERNAL volumes, use the 'volume' block in external_locations."
+  type        = any
+  default     = {}
 }
-
-# ---------------------------------------------------------------------------------------------------------------------
-# CLUSTER POLICIES
-# ---------------------------------------------------------------------------------------------------------------------
 
 variable "cluster_policies" {
-  description = "Map of cluster policies to create"
-  type = map(object({
-    definition            = string
-    description           = optional(string)
-    max_clusters_per_user = optional(number)
-    grants = optional(list(object({
-      principal  = string
-      permission = string
-    })), [])
-  }))
-  default = {}
+  description = "Map of cluster policies to create. See module for schema."
+  type        = any
+  default     = {}
 }
-
-# ---------------------------------------------------------------------------------------------------------------------
-# SECRET SCOPES
-# ---------------------------------------------------------------------------------------------------------------------
 
 variable "secret_scopes" {
-  description = "Map of secret scopes to create"
-  type = map(object({
-    initial_manage_principal = optional(string, "users")
-    keyvault_metadata = optional(object({
-      resource_id = string
-      dns_name    = string
-    }))
-    acls = optional(list(object({
-      principal  = string
-      permission = string
-    })), [])
-  }))
-  default = {}
+  description = "Map of secret scopes to create (Databricks-backed or Key Vault-backed). See module for schema."
+  type        = any
+  default     = {}
 }
 
-# ---------------------------------------------------------------------------------------------------------------------
-# IP ACCESS LISTS
-# ---------------------------------------------------------------------------------------------------------------------
-
 variable "ip_access_lists" {
-  description = "Map of IP access lists"
-  type = map(object({
-    list_type    = string
-    ip_addresses = list(string)
-    enabled      = optional(bool, true)
-  }))
-  default = {}
+  description = "Map of IP access lists for workspace access control. See module for schema."
+  type        = any
+  default     = {}
 }
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -288,17 +182,7 @@ variable "crossplane_sp_groups" {
 # ---------------------------------------------------------------------------------------------------------------------
 
 variable "service_principals" {
-  description = "Map of additional service principals to register"
-  type = map(object({
-    application_id             = optional(string)       # Direct ID or null to fetch from Key Vault
-    keyvault_secret_name       = optional(string)       # Key Vault secret name for application ID
-    display_name               = optional(string)
-    active                     = optional(bool, true)
-    allow_cluster_create       = optional(bool, false)
-    allow_instance_pool_create = optional(bool, false)
-    databricks_sql_access      = optional(bool, false)
-    workspace_access           = optional(bool, true)
-    groups                     = optional(list(string), [])
-  }))
-  default = {}
+  description = "Map of additional service principals to register. See module for schema."
+  type        = any
+  default     = {}
 }

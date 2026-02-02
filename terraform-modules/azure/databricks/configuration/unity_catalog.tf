@@ -8,13 +8,6 @@ resource "databricks_metastore_assignment" "this" {
 
   workspace_id = var.workspace_id
   metastore_id = var.unity_catalog_metastore_id
-
-  lifecycle {
-    precondition {
-      condition     = var.unity_catalog_metastore_id != null
-      error_message = "Metastore ID is required for Unity Catalog features."
-    }
-  }
 }
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -43,18 +36,14 @@ resource "databricks_storage_credential" "this" {
       condition     = var.access_connector_id != null || each.value.azure_managed_identity_id != null
       error_message = "Either access_connector_id or azure_managed_identity_id must be provided for storage credential '${each.key}'."
     }
-
-    # Prevent credential deletion if external locations depend on it
     create_before_destroy = true
   }
 }
 
 resource "databricks_grants" "storage_credentials" {
-  for_each = {
-    for item in local.storage_credential_grants : "${item.credential_key}-${item.principal}" => item
-  }
+  for_each = local.storage_credential_grants
 
-  storage_credential = databricks_storage_credential.this[each.value.credential_key].id
+  storage_credential = databricks_storage_credential.this[each.value.resource_key].id
 
   grant {
     principal  = each.value.principal
@@ -62,18 +51,11 @@ resource "databricks_grants" "storage_credentials" {
   }
 
   lifecycle {
-    # Validate privilege values
     precondition {
       condition = alltrue([
-        for priv in each.value.privileges : contains([
-          "ALL_PRIVILEGES",
-          "CREATE_EXTERNAL_LOCATION",
-          "CREATE_EXTERNAL_TABLE",
-          "READ_FILES",
-          "WRITE_FILES"
-        ], priv)
+        for priv in each.value.privileges : contains(local.valid_privileges.storage_credential, priv)
       ])
-      error_message = "Invalid privilege for storage credential. Valid values: ALL_PRIVILEGES, CREATE_EXTERNAL_LOCATION, CREATE_EXTERNAL_TABLE, READ_FILES, WRITE_FILES."
+      error_message = "Invalid privilege for storage credential. Valid values: ${join(", ", local.valid_privileges.storage_credential)}"
     }
   }
 }
@@ -91,8 +73,8 @@ resource "databricks_external_location" "this" {
   credential_name = each.value.credential_name != null ? each.value.credential_name : (
     length(var.storage_credentials) > 0 ? keys(var.storage_credentials)[0] : null
   )
-  skip_validation = each.value.skip_validation
-  read_only       = each.value.read_only
+  skip_validation = coalesce(each.value.skip_validation, local.defaults.external_location_skip_validation)
+  read_only       = coalesce(each.value.read_only, local.defaults.external_location_read_only)
   comment         = each.value.comment
   owner           = each.value.owner
 
@@ -103,7 +85,7 @@ resource "databricks_external_location" "this" {
 
   lifecycle {
     precondition {
-      condition     = can(regex("^abfss://", each.value.url)) || can(regex("^wasbs://", each.value.url)) || can(regex("^s3://", each.value.url)) || can(regex("^gs://", each.value.url))
+      condition     = can(regex("^(abfss|wasbs|s3|gs)://", each.value.url))
       error_message = "External location URL for '${each.key}' must start with abfss://, wasbs://, s3://, or gs://."
     }
 
@@ -115,11 +97,9 @@ resource "databricks_external_location" "this" {
 }
 
 resource "databricks_grants" "external_locations" {
-  for_each = {
-    for item in local.external_location_grants : "${item.location_key}-${item.principal}" => item
-  }
+  for_each = local.external_location_grants
 
-  external_location = databricks_external_location.this[each.value.location_key].id
+  external_location = databricks_external_location.this[each.value.resource_key].id
 
   grant {
     principal  = each.value.principal
@@ -129,15 +109,9 @@ resource "databricks_grants" "external_locations" {
   lifecycle {
     precondition {
       condition = alltrue([
-        for priv in each.value.privileges : contains([
-          "ALL_PRIVILEGES",
-          "CREATE_EXTERNAL_TABLE",
-          "CREATE_MANAGED_STORAGE",
-          "READ_FILES",
-          "WRITE_FILES"
-        ], priv)
+        for priv in each.value.privileges : contains(local.valid_privileges.external_location, priv)
       ])
-      error_message = "Invalid privilege for external location."
+      error_message = "Invalid privilege for external location. Valid values: ${join(", ", local.valid_privileges.external_location)}"
     }
   }
 }

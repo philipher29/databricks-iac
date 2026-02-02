@@ -7,61 +7,32 @@ resource "databricks_group" "this" {
   for_each = var.groups
 
   display_name               = each.value.display_name
-  allow_cluster_create       = each.value.allow_cluster_create
-  allow_instance_pool_create = each.value.allow_instance_pool_create
-  databricks_sql_access      = each.value.databricks_sql_access
-  workspace_access           = each.value.workspace_access
+  allow_cluster_create       = coalesce(each.value.allow_cluster_create, local.defaults.group_allow_cluster_create)
+  allow_instance_pool_create = coalesce(each.value.allow_instance_pool_create, local.defaults.group_allow_instance_pool_create)
+  databricks_sql_access      = coalesce(each.value.databricks_sql_access, local.defaults.group_databricks_sql_access)
+  workspace_access           = coalesce(each.value.workspace_access, local.defaults.group_workspace_access)
 }
 
 # ---------------------------------------------------------------------------------------------------------------------
-# GROUP MEMBERSHIP - Users
+# GROUP MEMBERSHIP - Direct Members (Users, Service Principals, EntraID Groups)
+# Unified resource for all non-child-group memberships
 # ---------------------------------------------------------------------------------------------------------------------
 
-resource "databricks_group_member" "users" {
-  for_each = {
-    for item in local.group_members : "${item.group_key}-${item.member}" => item
-  }
+resource "databricks_group_member" "direct" {
+  for_each = local.direct_memberships
 
   group_id  = databricks_group.this[each.value.group_key].id
-  member_id = each.value.member
+  member_id = each.value.member_id
 }
 
 # ---------------------------------------------------------------------------------------------------------------------
-# GROUP MEMBERSHIP - Service Principals
-# ---------------------------------------------------------------------------------------------------------------------
-
-resource "databricks_group_member" "service_principals" {
-  for_each = {
-    for item in local.group_service_principals : "${item.group_key}-${item.service_principal}" => item
-  }
-
-  group_id  = databricks_group.this[each.value.group_key].id
-  member_id = each.value.service_principal
-}
-
-# ---------------------------------------------------------------------------------------------------------------------
-# GROUP MEMBERSHIP - Nested Groups
+# GROUP MEMBERSHIP - Child Groups
+# Separate resource because member_id references created groups
 # ---------------------------------------------------------------------------------------------------------------------
 
 resource "databricks_group_member" "child_groups" {
-  for_each = {
-    for item in local.group_child_groups : "${item.group_key}-${item.child_group}" => item
-  }
+  for_each = local.child_group_memberships
 
   group_id  = databricks_group.this[each.value.group_key].id
-  member_id = databricks_group.this[each.value.child_group].id
-}
-
-# ---------------------------------------------------------------------------------------------------------------------
-# GROUP MEMBERSHIP - EntraID Groups
-# Maps Azure AD groups to Databricks groups without requiring azuread provider
-# ---------------------------------------------------------------------------------------------------------------------
-
-resource "databricks_group_member" "entra_id_groups" {
-  for_each = {
-    for item in local.group_entra_id_groups : "${item.group_key}-${item.entra_group_name}" => item
-  }
-
-  group_id  = databricks_group.this[each.value.group_key].id
-  member_id = each.value.entra_group_id
+  member_id = databricks_group.this[each.value.member_id].id
 }

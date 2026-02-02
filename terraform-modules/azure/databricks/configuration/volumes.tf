@@ -13,21 +13,26 @@ resource "databricks_volume" "managed" {
   comment      = each.value.comment
   owner        = each.value.owner
 
-  depends_on = [
-    databricks_schema.this
-  ]
+  depends_on = [databricks_schema.this]
 }
 
 resource "databricks_grants" "managed_volumes" {
-  for_each = {
-    for item in local.volume_grants : "${item.volume_key}-${item.principal}" => item
-  }
+  for_each = local.managed_volume_grants
 
-  volume = "${var.volumes[each.value.volume_key].catalog_name}.${var.volumes[each.value.volume_key].schema_name}.${databricks_volume.managed[each.value.volume_key].name}"
+  volume = "${each.value.catalog_name}.${each.value.schema_name}.${databricks_volume.managed[each.value.resource_key].name}"
 
   grant {
     principal  = each.value.principal
     privileges = each.value.privileges
+  }
+
+  lifecycle {
+    precondition {
+      condition = alltrue([
+        for priv in each.value.privileges : contains(local.valid_privileges.volume, priv)
+      ])
+      error_message = "Invalid privilege for volume. Valid values: ${join(", ", local.valid_privileges.volume)}"
+    }
   }
 }
 
@@ -54,14 +59,21 @@ resource "databricks_volume" "external" {
 }
 
 resource "databricks_grants" "external_volumes" {
-  for_each = {
-    for item in local.external_location_volume_grants : "${item.volume_key}-${item.principal}" => item
-  }
+  for_each = local.external_volume_grants
 
-  volume = "${local.external_location_volumes[each.value.volume_key].catalog_name}.${local.external_location_volumes[each.value.volume_key].schema_name}.${databricks_volume.external[each.value.volume_key].name}"
+  volume = "${each.value.catalog_name}.${each.value.schema_name}.${databricks_volume.external[each.value.resource_key].name}"
 
   grant {
     principal  = each.value.principal
     privileges = each.value.privileges
+  }
+
+  lifecycle {
+    precondition {
+      condition = alltrue([
+        for priv in each.value.privileges : contains(local.valid_privileges.volume, priv)
+      ])
+      error_message = "Invalid privilege for volume. Valid values: ${join(", ", local.valid_privileges.volume)}"
+    }
   }
 }

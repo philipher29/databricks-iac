@@ -27,7 +27,7 @@ data "azurerm_key_vault_secret" "crossplane_sp" {
 data "azurerm_key_vault_secret" "service_principals" {
   for_each = var.keyvault_name != null ? {
     for k, v in var.service_principals : k => v.keyvault_secret_name
-    if v.keyvault_secret_name != null
+    if try(v.keyvault_secret_name, null) != null
   } : {}
 
   name         = each.value
@@ -35,7 +35,8 @@ data "azurerm_key_vault_secret" "service_principals" {
 }
 
 # ---------------------------------------------------------------------------------------------------------------------
-# LOCAL VALUES FOR SERVICE PRINCIPAL CONFIGURATION
+# LOCAL VALUES
+# Consolidate configuration and apply defaults
 # ---------------------------------------------------------------------------------------------------------------------
 
 locals {
@@ -43,24 +44,24 @@ locals {
   crossplane_sp_config = var.enable_crossplane_service_principal ? {
     application_id             = var.keyvault_name != null ? data.azurerm_key_vault_secret.crossplane_sp[0].value : null
     display_name               = var.crossplane_sp_display_name
-    allow_cluster_create       = true
-    allow_instance_pool_create = true
-    databricks_sql_access      = true
-    workspace_access           = true
+    allow_cluster_create       = null # Use module defaults
+    allow_instance_pool_create = null
+    databricks_sql_access      = null
+    workspace_access           = null
     groups                     = var.crossplane_sp_groups
   } : null
 
   # Merge application IDs from Key Vault and direct configuration
   service_principals_resolved = {
     for k, v in var.service_principals : k => {
-      application_id             = coalesce(v.application_id, try(data.azurerm_key_vault_secret.service_principals[k].value, null))
-      display_name               = v.display_name
-      active                     = v.active
-      allow_cluster_create       = v.allow_cluster_create
-      allow_instance_pool_create = v.allow_instance_pool_create
-      databricks_sql_access      = v.databricks_sql_access
-      workspace_access           = v.workspace_access
-      groups                     = v.groups
+      application_id             = coalesce(try(v.application_id, null), try(data.azurerm_key_vault_secret.service_principals[k].value, null))
+      display_name               = try(v.display_name, null)
+      active                     = try(v.active, null)
+      allow_cluster_create       = try(v.allow_cluster_create, null)
+      allow_instance_pool_create = try(v.allow_instance_pool_create, null)
+      databricks_sql_access      = try(v.databricks_sql_access, null)
+      workspace_access           = try(v.workspace_access, null)
+      groups                     = try(v.groups, [])
     }
   }
 }
@@ -78,6 +79,12 @@ module "databricks_config" {
 
   # Unity Catalog
   unity_catalog_metastore_id = var.unity_catalog_metastore_id
+
+  # Defaults and naming configuration
+  defaults = var.defaults
+  naming = {
+    environment = var.environment
+  }
 
   # EntraID group mapping
   entra_id_groups = var.entra_id_groups
