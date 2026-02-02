@@ -127,11 +127,37 @@ locals {
     ]
   ])
 
-  # Volume grants
+  # Volume grants (MANAGED volumes)
   volume_grants = flatten([
     for vol_key, vol in var.volumes : [
       for grant in vol.grants : {
         volume_key = vol_key
+        principal  = grant.principal
+        privileges = grant.privileges
+      }
+    ]
+  ])
+
+  # External location volumes - EXTERNAL volumes embedded in external_locations
+  external_location_volumes = {
+    for loc_key, loc in var.external_locations : loc_key => {
+      location_key     = loc_key
+      name             = coalesce(loc.volume.name, loc_key)
+      catalog_name     = loc.volume.catalog_name
+      schema_name      = loc.volume.schema_name
+      storage_location = loc.volume.subpath != null ? "${trimsuffix(loc.url, "/")}${loc.volume.subpath}" : loc.url
+      comment          = loc.volume.comment
+      owner            = coalesce(loc.volume.owner, loc.owner)
+      grants           = coalesce(loc.volume.grants, [])
+    }
+    if loc.volume != null
+  }
+
+  # External location volume grants
+  external_location_volume_grants = flatten([
+    for loc_key, vol in local.external_location_volumes : [
+      for grant in vol.grants : {
+        volume_key = loc_key
         principal  = grant.principal
         privileges = grant.privileges
       }

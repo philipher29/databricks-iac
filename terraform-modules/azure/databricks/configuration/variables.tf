@@ -77,7 +77,7 @@ variable "storage_credentials" {
 # ---------------------------------------------------------------------------------------------------------------------
 
 variable "external_locations" {
-  description = "Map of Unity Catalog external locations to create"
+  description = "Map of Unity Catalog external locations to create, with optional EXTERNAL volume creation"
   type = map(object({
     url             = string
     credential_name = optional(string)
@@ -89,6 +89,19 @@ variable "external_locations" {
       principal  = string
       privileges = list(string)
     })), [])
+    # Optional: Create an EXTERNAL volume at this location
+    volume = optional(object({
+      catalog_name = string
+      schema_name  = string
+      name         = optional(string) # Defaults to external location key
+      subpath      = optional(string) # Subpath under the location URL (e.g., "/volumes/files")
+      comment      = optional(string)
+      owner        = optional(string)
+      grants = optional(list(object({
+        principal  = string
+        privileges = list(string)
+      })), [])
+    }))
   }))
   default = {}
 }
@@ -122,31 +135,22 @@ variable "catalogs" {
 }
 
 # ---------------------------------------------------------------------------------------------------------------------
-# VOLUMES
+# VOLUMES (MANAGED only - use external_locations.volume for EXTERNAL volumes)
 # ---------------------------------------------------------------------------------------------------------------------
 
 variable "volumes" {
-  description = "Map of Unity Catalog volumes to create"
+  description = "Map of Unity Catalog MANAGED volumes to create. For EXTERNAL volumes, use the 'volume' block in external_locations instead."
   type = map(object({
-    catalog_name     = string
-    schema_name      = string
-    volume_type      = string # MANAGED or EXTERNAL
-    storage_location = optional(string) # Required for EXTERNAL volumes
-    comment          = optional(string)
-    owner            = optional(string)
+    catalog_name = string
+    schema_name  = string
+    comment      = optional(string)
+    owner        = optional(string)
     grants = optional(list(object({
       principal  = string
       privileges = list(string)
     })), [])
   }))
   default = {}
-
-  validation {
-    condition = alltrue([
-      for k, v in var.volumes : contains(["MANAGED", "EXTERNAL"], v.volume_type)
-    ])
-    error_message = "Volume type must be either MANAGED or EXTERNAL."
-  }
 }
 
 # ---------------------------------------------------------------------------------------------------------------------

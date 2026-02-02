@@ -48,6 +48,18 @@ external_locations = {
         privileges = ["READ_FILES", "WRITE_FILES", "CREATE_EXTERNAL_TABLE"]
       }
     ]
+    # EXTERNAL volume embedded in this location
+    volume = {
+      catalog_name = "prod_analytics"
+      schema_name  = "bronze"
+      name         = "prod_landing_files"
+      subpath      = "/volumes/files"
+      comment      = "Production file landing zone"
+      owner        = "Data Engineers"
+      grants = [
+        { principal = "Data Engineers", privileges = ["READ_VOLUME", "WRITE_VOLUME"] }
+      ]
+    }
   }
   prod_processed = {
     url             = "abfss://processed@stproddatabricks.dfs.core.windows.net/"
@@ -80,6 +92,19 @@ external_locations = {
         privileges = ["READ_FILES"]
       }
     ]
+    # EXTERNAL volume embedded in this location
+    volume = {
+      catalog_name = "prod_analytics"
+      schema_name  = "gold"
+      name         = "prod_reports"
+      subpath      = "/volumes/reports"
+      comment      = "Production report exports"
+      owner        = "Data Engineers"
+      grants = [
+        { principal = "Data Engineers", privileges = ["READ_VOLUME", "WRITE_VOLUME"] },
+        { principal = "Data Analysts", privileges = ["READ_VOLUME"] }
+      ]
+    }
   }
   prod_archive = {
     url             = "abfss://archive@stproddatabricks.dfs.core.windows.net/"
@@ -161,42 +186,19 @@ catalogs = {
 }
 
 # ---------------------------------------------------------------------------------------------------------------------
-# VOLUMES
+# VOLUMES (MANAGED only - EXTERNAL volumes are now in external_locations)
 # ---------------------------------------------------------------------------------------------------------------------
 
 volumes = {
-  prod_landing_files = {
-    catalog_name     = "prod_analytics"
-    schema_name      = "bronze"
-    volume_type      = "EXTERNAL"
-    storage_location = "abfss://landing@stproddatabricks.dfs.core.windows.net/volumes/files"
-    comment          = "Production file landing zone"
-    owner            = "Data Engineers"
-    grants = [
-      { principal = "Data Engineers", privileges = ["READ_VOLUME", "WRITE_VOLUME"] }
-    ]
-  }
+  # MANAGED volume - stored within Unity Catalog managed storage
   prod_ml_models = {
     catalog_name = "prod_analytics"
     schema_name  = "ml_features"
-    volume_type  = "MANAGED"
     comment      = "Production ML model artifacts"
     owner        = "Data Scientists"
     grants = [
       { principal = "Data Scientists", privileges = ["READ_VOLUME", "WRITE_VOLUME"] },
       { principal = "Data Engineers", privileges = ["READ_VOLUME"] }
-    ]
-  }
-  prod_reports = {
-    catalog_name     = "prod_analytics"
-    schema_name      = "gold"
-    volume_type      = "EXTERNAL"
-    storage_location = "abfss://curated@stproddatabricks.dfs.core.windows.net/volumes/reports"
-    comment          = "Production report exports"
-    owner            = "Data Engineers"
-    grants = [
-      { principal = "Data Engineers", privileges = ["READ_VOLUME", "WRITE_VOLUME"] },
-      { principal = "Data Analysts", privileges = ["READ_VOLUME"] }
     ]
   }
 }

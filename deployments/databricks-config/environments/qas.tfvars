@@ -46,6 +46,17 @@ external_locations = {
         privileges = ["READ_FILES", "WRITE_FILES", "CREATE_EXTERNAL_TABLE"]
       }
     ]
+    # EXTERNAL volume embedded in this location
+    volume = {
+      catalog_name = "qas_analytics"
+      schema_name  = "bronze"
+      name         = "qas_landing_files"
+      subpath      = "/volumes/files"
+      comment      = "Landing zone for file uploads"
+      grants = [
+        { principal = "Data Engineers", privileges = ["READ_VOLUME", "WRITE_VOLUME"] }
+      ]
+    }
   }
   qas_processed = {
     url             = "abfss://processed@stqasdatabricks.dfs.core.windows.net/"
@@ -127,21 +138,11 @@ catalogs = {
 }
 
 # ---------------------------------------------------------------------------------------------------------------------
-# VOLUMES
+# VOLUMES (MANAGED only - EXTERNAL volumes are now in external_locations)
 # ---------------------------------------------------------------------------------------------------------------------
 
-volumes = {
-  qas_landing_files = {
-    catalog_name     = "qas_analytics"
-    schema_name      = "bronze"
-    volume_type      = "EXTERNAL"
-    storage_location = "abfss://landing@stqasdatabricks.dfs.core.windows.net/volumes/files"
-    comment          = "Landing zone for file uploads"
-    grants = [
-      { principal = "Data Engineers", privileges = ["READ_VOLUME", "WRITE_VOLUME"] }
-    ]
-  }
-}
+# No managed volumes in QAS - EXTERNAL volumes moved to external_locations above
+volumes = {}
 
 # ---------------------------------------------------------------------------------------------------------------------
 # SECRET SCOPES (Key Vault backed in QAS)

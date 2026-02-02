@@ -75,17 +75,29 @@ output "schemas" {
 # ---------------------------------------------------------------------------------------------------------------------
 
 output "volumes" {
-  description = "Map of created volumes"
-  value = {
-    for key, vol in databricks_volume.this : key => {
-      id               = vol.id
-      name             = vol.name
-      catalog_name     = vol.catalog_name
-      schema_name      = vol.schema_name
-      volume_type      = vol.volume_type
-      storage_location = vol.storage_location
+  description = "Map of all created volumes (both managed and external)"
+  value = merge(
+    {
+      for key, vol in databricks_volume.managed : key => {
+        id               = vol.id
+        name             = vol.name
+        catalog_name     = vol.catalog_name
+        schema_name      = vol.schema_name
+        volume_type      = vol.volume_type
+        storage_location = vol.storage_location
+      }
+    },
+    {
+      for key, vol in databricks_volume.external : key => {
+        id               = vol.id
+        name             = vol.name
+        catalog_name     = vol.catalog_name
+        schema_name      = vol.schema_name
+        volume_type      = vol.volume_type
+        storage_location = vol.storage_location
+      }
     }
-  }
+  )
 }
 
 # ---------------------------------------------------------------------------------------------------------------------
