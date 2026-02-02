@@ -29,6 +29,36 @@ locals {
       }
     ]
   ])
+
+  # EntraID group memberships - maps group display names to Azure AD object IDs
+  group_entra_id_groups = flatten([
+    for group_key, group in var.groups : [
+      for entra_group_name in coalesce(group.entra_id_groups, []) : {
+        group_key        = group_key
+        entra_group_name = entra_group_name
+        entra_group_id   = var.entra_id_groups[entra_group_name]
+      }
+    ]
+  ])
+}
+
+# ---------------------------------------------------------------------------------------------------------------------
+# SERVICE PRINCIPAL MEMBERSHIP FLATTENING
+# ---------------------------------------------------------------------------------------------------------------------
+
+locals {
+  # Crossplane SP group memberships
+  crossplane_sp_groups = var.crossplane_service_principal != null ? coalesce(var.crossplane_service_principal.groups, []) : []
+
+  # Generic service principal group memberships
+  service_principal_group_memberships = flatten([
+    for sp_key, sp in var.service_principals : [
+      for group_key in coalesce(sp.groups, []) : {
+        sp_key    = sp_key
+        group_key = group_key
+      }
+    ]
+  ])
 }
 
 # ---------------------------------------------------------------------------------------------------------------------

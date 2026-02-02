@@ -57,6 +57,34 @@ variable "unity_catalog_metastore_id" {
 }
 
 # ---------------------------------------------------------------------------------------------------------------------
+# KEY VAULT CONFIGURATION
+# For fetching service principal credentials
+# ---------------------------------------------------------------------------------------------------------------------
+
+variable "keyvault_name" {
+  description = "Name of the Azure Key Vault containing service principal secrets"
+  type        = string
+  default     = null
+}
+
+variable "keyvault_resource_group_name" {
+  description = "Resource group name for the Key Vault (defaults to workspace resource group)"
+  type        = string
+  default     = null
+}
+
+# ---------------------------------------------------------------------------------------------------------------------
+# ENTRA ID GROUPS
+# Maps Azure AD group display names to object IDs (avoids azuread provider)
+# ---------------------------------------------------------------------------------------------------------------------
+
+variable "entra_id_groups" {
+  description = "Map of EntraID group display names to their Azure AD object IDs"
+  type        = map(string)
+  default     = {}
+}
+
+# ---------------------------------------------------------------------------------------------------------------------
 # GROUPS
 # ---------------------------------------------------------------------------------------------------------------------
 
@@ -71,6 +99,7 @@ variable "groups" {
     members                    = optional(list(string), [])
     service_principals         = optional(list(string), [])
     child_groups               = optional(list(string), [])
+    entra_id_groups            = optional(list(string), [])
   }))
   default = {}
 }
@@ -211,6 +240,54 @@ variable "ip_access_lists" {
     list_type    = string
     ip_addresses = list(string)
     enabled      = optional(bool, true)
+  }))
+  default = {}
+}
+
+# ---------------------------------------------------------------------------------------------------------------------
+# CROSSPLANE SERVICE PRINCIPAL
+# ---------------------------------------------------------------------------------------------------------------------
+
+variable "enable_crossplane_service_principal" {
+  description = "Whether to create and configure Crossplane service principal"
+  type        = bool
+  default     = false
+}
+
+variable "crossplane_sp_secret_name" {
+  description = "Name of the Key Vault secret containing Crossplane SP application ID"
+  type        = string
+  default     = "crossplane-sp-client-id"
+}
+
+variable "crossplane_sp_display_name" {
+  description = "Display name for Crossplane service principal in Databricks"
+  type        = string
+  default     = "Crossplane"
+}
+
+variable "crossplane_sp_groups" {
+  description = "Databricks group keys to add Crossplane SP to"
+  type        = list(string)
+  default     = ["platform_admins"]
+}
+
+# ---------------------------------------------------------------------------------------------------------------------
+# ADDITIONAL SERVICE PRINCIPALS
+# ---------------------------------------------------------------------------------------------------------------------
+
+variable "service_principals" {
+  description = "Map of additional service principals to register"
+  type = map(object({
+    application_id             = optional(string)       # Direct ID or null to fetch from Key Vault
+    keyvault_secret_name       = optional(string)       # Key Vault secret name for application ID
+    display_name               = optional(string)
+    active                     = optional(bool, true)
+    allow_cluster_create       = optional(bool, false)
+    allow_instance_pool_create = optional(bool, false)
+    databricks_sql_access      = optional(bool, false)
+    workspace_access           = optional(bool, true)
+    groups                     = optional(list(string), [])
   }))
   default = {}
 }

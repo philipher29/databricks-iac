@@ -24,6 +24,17 @@ variable "unity_catalog_metastore_id" {
 }
 
 # ---------------------------------------------------------------------------------------------------------------------
+# ENTRA ID GROUP MAPPING
+# Provides Azure AD group object IDs without requiring azuread provider permissions
+# ---------------------------------------------------------------------------------------------------------------------
+
+variable "entra_id_groups" {
+  description = "Map of EntraID group display names to their Azure AD object IDs for adding as Databricks group members"
+  type        = map(string)
+  default     = {}
+}
+
+# ---------------------------------------------------------------------------------------------------------------------
 # GROUPS AND PERMISSIONS
 # ---------------------------------------------------------------------------------------------------------------------
 
@@ -38,6 +49,7 @@ variable "groups" {
     members                    = optional(list(string), [])
     service_principals         = optional(list(string), [])
     child_groups               = optional(list(string), [])
+    entra_id_groups            = optional(list(string), []) # Keys from entra_id_groups variable
   }))
   default = {}
 }
@@ -194,4 +206,37 @@ variable "ip_access_lists" {
     ])
     error_message = "List type must be either ALLOW or BLOCK."
   }
+}
+
+# ---------------------------------------------------------------------------------------------------------------------
+# SERVICE PRINCIPALS
+# ---------------------------------------------------------------------------------------------------------------------
+
+variable "crossplane_service_principal" {
+  description = "Configuration for Crossplane service principal to manage Databricks resources"
+  type = object({
+    application_id             = string
+    display_name               = optional(string, "Crossplane")
+    allow_cluster_create       = optional(bool, true)
+    allow_instance_pool_create = optional(bool, true)
+    databricks_sql_access      = optional(bool, true)
+    workspace_access           = optional(bool, true)
+    groups                     = optional(list(string), []) # Group keys to add SP to
+  })
+  default = null
+}
+
+variable "service_principals" {
+  description = "Map of additional service principals to register in Databricks workspace"
+  type = map(object({
+    application_id             = string
+    display_name               = optional(string)
+    active                     = optional(bool, true)
+    allow_cluster_create       = optional(bool, false)
+    allow_instance_pool_create = optional(bool, false)
+    databricks_sql_access      = optional(bool, false)
+    workspace_access           = optional(bool, true)
+    groups                     = optional(list(string), [])
+  }))
+  default = {}
 }

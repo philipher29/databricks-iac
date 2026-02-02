@@ -4,7 +4,21 @@
 # ---------------------------------------------------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------------------------------------------------
+# ENTRA ID GROUPS MAPPING
+# Maps Azure AD group display names to object IDs (avoids azuread provider)
+# Replace UUIDs with actual Azure AD group object IDs from your tenant
+# ---------------------------------------------------------------------------------------------------------------------
+
+entra_id_groups = {
+  # Example mappings - replace with actual Azure AD group object IDs:
+  # "Data Engineering Team" = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+  # "Data Science Team"     = "yyyyyyyy-yyyy-yyyy-yyyy-yyyyyyyyyyyy"
+  # "Data Analyst Team"     = "zzzzzzzz-zzzz-zzzz-zzzz-zzzzzzzzzzzz"
+}
+
+# ---------------------------------------------------------------------------------------------------------------------
 # GROUPS (common structure, may have different permissions per env)
+# Use entra_id_groups field to map Azure AD groups without azuread provider
 # ---------------------------------------------------------------------------------------------------------------------
 
 groups = {
@@ -88,3 +102,14 @@ cluster_policies = {
     ]
   }
 }
+
+# ---------------------------------------------------------------------------------------------------------------------
+# CROSSPLANE SERVICE PRINCIPAL
+# Enables Crossplane to manage Databricks resources via Kubernetes
+# ---------------------------------------------------------------------------------------------------------------------
+
+# Enable in environment-specific tfvars when ready:
+# enable_crossplane_service_principal = true
+# keyvault_name                       = "kv-databricks-<env>"
+# crossplane_sp_secret_name           = "crossplane-sp-client-id"
+# crossplane_sp_groups                = ["platform_admins"]

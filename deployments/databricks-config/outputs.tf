@@ -41,3 +41,13 @@ output "secret_scopes" {
   description = "Created secret scopes"
   value       = module.databricks_config.secret_scopes
 }
+
+output "crossplane_service_principal" {
+  description = "Crossplane service principal details"
+  value       = module.databricks_config.crossplane_service_principal
+}
+
+output "service_principals" {
+  description = "Created service principals"
+  value       = module.databricks_config.service_principals
+}

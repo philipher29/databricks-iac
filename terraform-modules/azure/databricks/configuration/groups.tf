@@ -51,3 +51,17 @@ resource "databricks_group_member" "child_groups" {
   group_id  = databricks_group.this[each.value.group_key].id
   member_id = databricks_group.this[each.value.child_group].id
 }
+
+# ---------------------------------------------------------------------------------------------------------------------
+# GROUP MEMBERSHIP - EntraID Groups
+# Maps Azure AD groups to Databricks groups without requiring azuread provider
+# ---------------------------------------------------------------------------------------------------------------------
+
+resource "databricks_group_member" "entra_id_groups" {
+  for_each = {
+    for item in local.group_entra_id_groups : "${item.group_key}-${item.entra_group_name}" => item
+  }
+
+  group_id  = databricks_group.this[each.value.group_key].id
+  member_id = each.value.entra_group_id
+}

@@ -4,6 +4,68 @@
 # ---------------------------------------------------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------------------------------------------------
+# KEY VAULT DATA SOURCES
+# Fetch service principal credentials from Key Vault
+# ---------------------------------------------------------------------------------------------------------------------
+
+data "azurerm_key_vault" "this" {
+  count = var.keyvault_name != null ? 1 : 0
+
+  name                = var.keyvault_name
+  resource_group_name = coalesce(var.keyvault_resource_group_name, var.resource_group_name)
+}
+
+# Crossplane SP Application ID from Key Vault
+data "azurerm_key_vault_secret" "crossplane_sp" {
+  count = var.enable_crossplane_service_principal && var.keyvault_name != null ? 1 : 0
+
+  name         = var.crossplane_sp_secret_name
+  key_vault_id = data.azurerm_key_vault.this[0].id
+}
+
+# Generic service principal secrets from Key Vault
+data "azurerm_key_vault_secret" "service_principals" {
+  for_each = var.keyvault_name != null ? {
+    for k, v in var.service_principals : k => v.keyvault_secret_name
+    if v.keyvault_secret_name != null
+  } : {}
+
+  name         = each.value
+  key_vault_id = data.azurerm_key_vault.this[0].id
+}
+
+# ---------------------------------------------------------------------------------------------------------------------
+# LOCAL VALUES FOR SERVICE PRINCIPAL CONFIGURATION
+# ---------------------------------------------------------------------------------------------------------------------
+
+locals {
+  # Crossplane SP configuration (only if enabled)
+  crossplane_sp_config = var.enable_crossplane_service_principal ? {
+    application_id             = var.keyvault_name != null ? data.azurerm_key_vault_secret.crossplane_sp[0].value : null
+    display_name               = var.crossplane_sp_display_name
+    allow_cluster_create       = true
+    allow_instance_pool_create = true
+    databricks_sql_access      = true
+    workspace_access           = true
+    groups                     = var.crossplane_sp_groups
+  } : null
+
+  # Merge application IDs from Key Vault and direct configuration
+  service_principals_resolved = {
+    for k, v in var.service_principals : k => {
+      application_id             = coalesce(v.application_id, try(data.azurerm_key_vault_secret.service_principals[k].value, null))
+      display_name               = v.display_name
+      active                     = v.active
+      allow_cluster_create       = v.allow_cluster_create
+      allow_instance_pool_create = v.allow_instance_pool_create
+      databricks_sql_access      = v.databricks_sql_access
+      workspace_access           = v.workspace_access
+      groups                     = v.groups
+    }
+  }
+}
+
+# ---------------------------------------------------------------------------------------------------------------------
 # DATABRICKS CONFIGURATION MODULE
 # ---------------------------------------------------------------------------------------------------------------------
 
@@ -17,8 +79,15 @@ module "databricks_config" {
   # Unity Catalog
   unity_catalog_metastore_id = var.unity_catalog_metastore_id
 
+  # EntraID group mapping
+  entra_id_groups = var.entra_id_groups
+
   # Groups
   groups = var.groups
+
+  # Service Principals
+  crossplane_service_principal = local.crossplane_sp_config
+  service_principals           = local.service_principals_resolved
 
   # Storage credentials and external locations
   storage_credentials = var.storage_credentials

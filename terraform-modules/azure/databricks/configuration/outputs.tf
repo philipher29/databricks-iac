@@ -130,3 +130,27 @@ output "ip_access_lists" {
     }
   }
 }
+
+# ---------------------------------------------------------------------------------------------------------------------
+# SERVICE PRINCIPAL OUTPUTS
+# ---------------------------------------------------------------------------------------------------------------------
+
+output "crossplane_service_principal" {
+  description = "Crossplane service principal details"
+  value = var.crossplane_service_principal != null ? {
+    id             = databricks_service_principal.crossplane[0].id
+    application_id = databricks_service_principal.crossplane[0].application_id
+    display_name   = databricks_service_principal.crossplane[0].display_name
+  } : null
+}
+
+output "service_principals" {
+  description = "Map of created service principals"
+  value = {
+    for key, sp in databricks_service_principal.this : key => {
+      id             = sp.id
+      application_id = sp.application_id
+      display_name   = sp.display_name
+    }
+  }
+}
