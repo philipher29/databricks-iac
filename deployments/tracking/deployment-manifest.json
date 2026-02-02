@@ -1,0 +1,125 @@
+{
+  "$schema": "./deployment-manifest.schema.json",
+  "lastUpdated": "2025-01-30T00:00:00Z",
+  "deployments": {
+    "databricks-workspace": {
+      "it": {
+        "version": null,
+        "deployedAt": null,
+        "deployedBy": null,
+        "commitSha": null,
+        "pipelineRunId": null,
+        "status": "not_deployed",
+        "promotedFrom": null,
+        "deploymentSource": null
+      },
+      "dev": {
+        "version": null,
+        "deployedAt": null,
+        "deployedBy": null,
+        "commitSha": null,
+        "pipelineRunId": null,
+        "status": "not_deployed",
+        "promotedFrom": null,
+        "deploymentSource": null
+      },
+      "qas": {
+        "version": null,
+        "deployedAt": null,
+        "deployedBy": null,
+        "commitSha": null,
+        "pipelineRunId": null,
+        "status": "not_deployed",
+        "promotedFrom": null,
+        "deploymentSource": null
+      },
+      "prod": {
+        "version": null,
+        "deployedAt": null,
+        "deployedBy": null,
+        "commitSha": null,
+        "pipelineRunId": null,
+        "status": "not_deployed",
+        "promotedFrom": null,
+        "deploymentSource": null,
+        "changeTicket": null
+      }
+    },
+    "databricks-config": {
+      "it": {
+        "version": null,
+        "deployedAt": null,
+        "deployedBy": null,
+        "commitSha": null,
+        "pipelineRunId": null,
+        "status": "not_deployed",
+        "promotedFrom": null,
+        "deploymentSource": null
+      },
+      "dev": {
+        "version": null,
+        "deployedAt": null,
+        "deployedBy": null,
+        "commitSha": null,
+        "pipelineRunId": null,
+        "status": "not_deployed",
+        "promotedFrom": null,
+        "deploymentSource": null
+      },
+      "qas": {
+        "version": null,
+        "deployedAt": null,
+        "deployedBy": null,
+        "commitSha": null,
+        "pipelineRunId": null,
+        "status": "not_deployed",
+        "promotedFrom": null,
+        "deploymentSource": null
+      },
+      "prod": {
+        "version": null,
+        "deployedAt": null,
+        "deployedBy": null,
+        "commitSha": null,
+        "pipelineRunId": null,
+        "status": "not_deployed",
+        "promotedFrom": null,
+        "deploymentSource": null,
+        "changeTicket": null
+      }
+    }
+  },
+  "promotionRules": {
+    "it": {
+      "requiresApproval": false,
+      "approvalType": null,
+      "canPromoteTo": ["dev"],
+      "description": "DevOps development environment - auto-deploys on main merge"
+    },
+    "dev": {
+      "requiresApproval": false,
+      "approvalType": null,
+      "canPromoteTo": ["qas"],
+      "description": "Developer environment - controlled versions promoted from IT"
+    },
+    "qas": {
+      "requiresApproval": true,
+      "approvalType": "azureEnvironment",
+      "approvers": ["platform-admins"],
+      "canPromoteTo": ["prod"],
+      "description": "Quality assurance - requires approval before deployment"
+    },
+    "prod": {
+      "requiresApproval": true,
+      "approvalType": "azureEnvironment",
+      "approvers": ["platform-admins", "security-team"],
+      "minimumApprovers": 2,
+      "canPromoteTo": [],
+      "description": "Production - requires multi-team approval"
+    }
+  },
+  "deploymentFlow": {
+    "order": ["it", "dev", "qas", "prod"],
+    "description": "IT (auto on main) -> DEV (manual version select) -> QAS (approval) -> PROD (multi-approval)"
+  }
+}

@@ -1,0 +1,11 @@
+/.agents/
+/.claude/
+/.codex/
+/.cursor/
+/.cursor/skills/
+/.cursor/skills/terraform-module-library/
+/.cursor/skills/terraform-module-library/references/
+/.cursor/skills/terraform-module-library/SKILL.md
+/.idea/
+/.junie/
+.terraform

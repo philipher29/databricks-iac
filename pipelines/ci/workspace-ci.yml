@@ -1,0 +1,151 @@
+# ---------------------------------------------------------------------------------------------------------------------
+# DATABRICKS WORKSPACE - CI PIPELINE
+# Runs on pull requests: validation, security scanning, and unit tests
+# ---------------------------------------------------------------------------------------------------------------------
+
+trigger: none  # CI pipeline triggered by PR only
+
+pr:
+  branches:
+    include:
+      - main
+      - release/*
+  paths:
+    include:
+      - terraform-modules/azure/databricks/workspace/**
+      - deployments/databricks-workspace/**
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  - name: moduleDirectory
+    value: '$(System.DefaultWorkingDirectory)/terraform-modules/azure/databricks/workspace'
+  - name: deploymentDirectory
+    value: '$(System.DefaultWorkingDirectory)/deployments/databricks-workspace'
+
+stages:
+  # ---------------------------------------------------------------------------------------------------------------------
+  # STAGE: Validate
+  # ---------------------------------------------------------------------------------------------------------------------
+  - stage: Validate
+    displayName: '🔍 Validate'
+    jobs:
+      - job: TerraformValidate
+        displayName: 'Terraform Validate & Format'
+        steps:
+          - checkout: self
+
+          - task: TerraformInstaller@1
+            displayName: 'Install Terraform'
+            inputs:
+              terraformVersion: 'latest'
+
+          - task: Bash@3
+            displayName: 'Terraform Format Check'
+            inputs:
+              targetType: inline
+              script: |
+                echo "Checking Terraform formatting..."
+                terraform fmt -check -recursive -diff $(moduleDirectory)
+                terraform fmt -check -recursive -diff $(deploymentDirectory)
+
+          - task: Bash@3
+            displayName: 'Terraform Init (Module)'
+            inputs:
+              targetType: inline
+              workingDirectory: $(moduleDirectory)
+              script: terraform init -backend=false
+
+          - task: Bash@3
+            displayName: 'Terraform Validate (Module)'
+            inputs:
+              targetType: inline
+              workingDirectory: $(moduleDirectory)
+              script: terraform validate
+
+          - task: Bash@3
+            displayName: 'Terraform Init (Deployment)'
+            inputs:
+              targetType: inline
+              workingDirectory: $(deploymentDirectory)
+              script: terraform init -backend=false
+
+          - task: Bash@3
+            displayName: 'Terraform Validate (Deployment)'
+            inputs:
+              targetType: inline
+              workingDirectory: $(deploymentDirectory)
+              script: terraform validate
+
+  # ---------------------------------------------------------------------------------------------------------------------
+  # STAGE: Security Scan
+  # ---------------------------------------------------------------------------------------------------------------------
+  - stage: SecurityScan
+    displayName: '🔒 Security Scan'
+    dependsOn: Validate
+    jobs:
+      - job: SecurityScan
+        displayName: 'tfsec & Checkov'
+        steps:
+          - checkout: self
+
+          - template: ../templates/security-scan.yml
+            parameters:
+              workingDirectory: $(moduleDirectory)
+              failOnHighSeverity: true
+
+  # ---------------------------------------------------------------------------------------------------------------------
+  # STAGE: Unit Tests
+  # ---------------------------------------------------------------------------------------------------------------------
+  - stage: UnitTests
+    displayName: '🧪 Unit Tests'
+    dependsOn: Validate
+    jobs:
+      - job: RunUnitTests
+        displayName: 'Terratest Unit Tests'
+        steps:
+          - checkout: self
+
+          - task: TerraformInstaller@1
+            displayName: 'Install Terraform'
+            inputs:
+              terraformVersion: 'latest'
+
+          - template: ../templates/run-tests.yml
+            parameters:
+              moduleDirectory: $(moduleDirectory)
+              runIntegrationTests: false
+
+  # ---------------------------------------------------------------------------------------------------------------------
+  # STAGE: Plan Preview (for all environments)
+  # ---------------------------------------------------------------------------------------------------------------------
+  - stage: PlanPreview
+    displayName: '📋 Plan Preview'
+    dependsOn:
+      - SecurityScan
+      - UnitTests
+    jobs:
+      - job: PlanDev
+        displayName: 'Plan DEV'
+        steps:
+          - checkout: self
+
+          - task: TerraformInstaller@1
+            inputs:
+              terraformVersion: 'latest'
+
+          - task: Bash@3
+            displayName: 'Plan DEV (dry-run)'
+            inputs:
+              targetType: inline
+              workingDirectory: $(deploymentDirectory)
+              script: |
+                terraform init -backend=false
+                terraform plan \
+                  -var-file=environments/common.tfvars \
+                  -var-file=environments/dev.tfvars \
+                  -var="subscription_id=dummy" \
+                  -var="managed_identity_client_id=dummy" \
+                  -input=false \
+                  || echo "Plan preview completed (backend not configured)"

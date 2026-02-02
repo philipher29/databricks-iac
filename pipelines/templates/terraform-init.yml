@@ -1,0 +1,42 @@
+# ---------------------------------------------------------------------------------------------------------------------
+# TERRAFORM INIT TEMPLATE
+# Reusable template for initializing Terraform with Azure backend
+# ---------------------------------------------------------------------------------------------------------------------
+
+parameters:
+  - name: workingDirectory
+    type: string
+  - name: environment
+    type: string
+  - name: backendResourceGroup
+    type: string
+  - name: backendStorageAccount
+    type: string
+  - name: backendContainer
+    type: string
+  - name: backendKey
+    type: string
+  - name: managedIdentityClientId
+    type: string
+
+steps:
+  - task: AzureCLI@2
+    displayName: 'Terraform Init'
+    inputs:
+      azureSubscription: ${{ parameters.environment }}-service-connection
+      scriptType: bash
+      scriptLocation: inlineScript
+      workingDirectory: ${{ parameters.workingDirectory }}
+      addSpnToEnvironment: false
+      inlineScript: |
+        # Use managed identity
+        export ARM_USE_MSI=true
+        export ARM_CLIENT_ID=${{ parameters.managedIdentityClientId }}
+
+        terraform init \
+          -backend-config="resource_group_name=${{ parameters.backendResourceGroup }}" \
+          -backend-config="storage_account_name=${{ parameters.backendStorageAccount }}" \
+          -backend-config="container_name=${{ parameters.backendContainer }}" \
+          -backend-config="key=${{ parameters.backendKey }}" \
+          -backend-config="use_msi=true" \
+          -backend-config="client_id=${{ parameters.managedIdentityClientId }}"

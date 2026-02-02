@@ -1,0 +1,344 @@
+# ---------------------------------------------------------------------------------------------------------------------
+# DATABRICKS CONFIGURATION - QAS DEPLOYMENT
+# Deploys Databricks configuration to QAS environment
+# Trigger: Manual only
+# Approval: Azure Environment approval (platform-admins)
+# Dependency: Requires workspace to be deployed first
+# ---------------------------------------------------------------------------------------------------------------------
+
+trigger: none
+pr: none
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+# ---------------------------------------------------------------------------------------------------------------------
+# PARAMETERS - Version Selection
+# ---------------------------------------------------------------------------------------------------------------------
+
+parameters:
+  - name: deploymentSource
+    displayName: 'Deployment Source'
+    type: string
+    default: 'promoteFromDEV'
+    values:
+      - promoteFromDEV      # Deploy same version as DEV (recommended)
+      - specificCommit      # Deploy specific git commit
+      - specificVersion     # Deploy specific version tag
+
+  - name: sourceCommit
+    displayName: 'Git Commit SHA (if specificCommit selected)'
+    type: string
+    default: ''
+
+  - name: sourceVersion
+    displayName: 'Version Tag (if specificVersion selected)'
+    type: string
+    default: ''
+
+# ---------------------------------------------------------------------------------------------------------------------
+# VARIABLES
+# ---------------------------------------------------------------------------------------------------------------------
+
+variables:
+  - group: terraform-backend
+  - group: databricks-qas
+  - name: environment
+    value: 'qas'
+  - name: moduleName
+    value: 'databricks-config'
+  - name: moduleDirectory
+    value: '$(System.DefaultWorkingDirectory)/terraform-modules/azure/databricks/configuration'
+  - name: workingDirectory
+    value: '$(System.DefaultWorkingDirectory)/deployments/databricks-config'
+
+stages:
+  # ---------------------------------------------------------------------------------------------------------------------
+  # STAGE: Pre-Check
+  # ---------------------------------------------------------------------------------------------------------------------
+  - stage: PreCheck
+    displayName: '🔍 Pre-Check'
+    jobs:
+      - job: VerifyDependencies
+        displayName: 'Verify Dependencies'
+        steps:
+          - checkout: self
+
+          - task: Bash@3
+            displayName: 'Check Dependencies'
+            inputs:
+              targetType: inline
+              script: |
+                MANIFEST="deployments/tracking/deployment-manifest.json"
+
+                # Check workspace is deployed
+                WS_STATUS=$(jq -r '.deployments["databricks-workspace"]["qas"].status' "$MANIFEST")
+                if [ "$WS_STATUS" != "deployed" ]; then
+                  echo "##vso[task.logissue type=error]Workspace must be deployed in QAS first"
+                  exit 1
+                fi
+
+                echo "✅ Workspace is deployed in QAS"
+
+  # ---------------------------------------------------------------------------------------------------------------------
+  # STAGE: Resolve Version
+  # ---------------------------------------------------------------------------------------------------------------------
+  - stage: ResolveVersion
+    displayName: '🔍 Resolve Deployment Version'
+    dependsOn: PreCheck
+    jobs:
+      - job: DetermineVersion
+        displayName: 'Determine Version to Deploy'
+        steps:
+          - checkout: self
+            fetchDepth: 0
+
+          - task: Bash@3
+            displayName: 'Show Available Versions'
+            inputs:
+              targetType: inline
+              script: |
+                echo "=== Deployment Manifest Status ==="
+                MANIFEST="deployments/tracking/deployment-manifest.json"
+
+                echo ""
+                echo "📦 Current Environment Status:"
+                echo "--------------------------------"
+                jq -r '.deployments["databricks-config"] | to_entries[] | "  \(.key): \(.value.status) - v\(.value.version // "none") (\(.value.commitSha // "N/A" | .[0:8]))"' "$MANIFEST"
+
+          - task: Bash@3
+            displayName: 'Resolve Source Version'
+            name: resolveVersion
+            inputs:
+              targetType: inline
+              script: |
+                set -e
+                MANIFEST="deployments/tracking/deployment-manifest.json"
+
+                # Get DEV deployment info
+                DEV_STATUS=$(jq -r '.deployments["databricks-config"]["dev"].status' "$MANIFEST")
+                DEV_VERSION=$(jq -r '.deployments["databricks-config"]["dev"].version' "$MANIFEST")
+                DEV_COMMIT=$(jq -r '.deployments["databricks-config"]["dev"].commitSha' "$MANIFEST")
+
+                echo "=== DEV Environment Status ==="
+                echo "Status: $DEV_STATUS"
+                echo "Version: $DEV_VERSION"
+                echo "Commit: $DEV_COMMIT"
+                echo "=============================="
+
+                # Verify DEV is deployed (mandatory for QAS)
+                if [ "$DEV_STATUS" != "deployed" ]; then
+                  echo "##vso[task.logissue type=error]DEV must be deployed before QAS. Current status: $DEV_STATUS"
+                  echo "##vso[task.logissue type=error]Run config-dev.yml first."
+                  exit 1
+                fi
+
+                # Resolve target based on deployment source
+                case "${{ parameters.deploymentSource }}" in
+                  "promoteFromDEV")
+                    if [ "$DEV_STATUS" != "deployed" ] || [ "$DEV_COMMIT" == "null" ]; then
+                      echo "##vso[task.logissue type=error]Cannot promote from DEV - no valid deployment found"
+                      exit 1
+                    fi
+                    TARGET_COMMIT="$DEV_COMMIT"
+                    TARGET_VERSION="$DEV_VERSION"
+                    PROMOTED_FROM="dev"
+                    DEPLOY_SOURCE="promoteFromDEV"
+                    echo "✅ Promoting version from DEV: $DEV_VERSION"
+                    ;;
+
+                  "specificCommit")
+                    TARGET_COMMIT="${{ parameters.sourceCommit }}"
+                    if [ -z "$TARGET_COMMIT" ]; then
+                      echo "##vso[task.logissue type=error]sourceCommit parameter is required when using specificCommit"
+                      exit 1
+                    fi
+                    if ! git cat-file -t "$TARGET_COMMIT" >/dev/null 2>&1; then
+                      echo "##vso[task.logissue type=error]Commit $TARGET_COMMIT not found in repository"
+                      exit 1
+                    fi
+                    TARGET_VERSION="commit:${TARGET_COMMIT:0:8}"
+                    PROMOTED_FROM=""
+                    DEPLOY_SOURCE="specificCommit"
+                    echo "✅ Using specific commit: $TARGET_COMMIT"
+                    ;;
+
+                  "specificVersion")
+                    TAG="${{ parameters.sourceVersion }}"
+                    if [ -z "$TAG" ]; then
+                      echo "##vso[task.logissue type=error]sourceVersion parameter is required when using specificVersion"
+                      exit 1
+                    fi
+                    TARGET_COMMIT=$(git rev-parse "$TAG" 2>/dev/null || echo "")
+                    if [ -z "$TARGET_COMMIT" ]; then
+                      echo "##vso[task.logissue type=error]Version tag $TAG not found in repository"
+                      exit 1
+                    fi
+                    TARGET_VERSION="$TAG"
+                    PROMOTED_FROM=""
+                    DEPLOY_SOURCE="specificVersion"
+                    echo "✅ Using version tag: $TAG -> $TARGET_COMMIT"
+                    ;;
+
+                  *)
+                    echo "##vso[task.logissue type=error]Unknown deployment source: ${{ parameters.deploymentSource }}"
+                    exit 1
+                    ;;
+                esac
+
+                # Set output variables
+                echo "##vso[task.setvariable variable=targetCommit;isOutput=true]$TARGET_COMMIT"
+                echo "##vso[task.setvariable variable=targetVersion;isOutput=true]$TARGET_VERSION"
+                echo "##vso[task.setvariable variable=promotedFrom;isOutput=true]$PROMOTED_FROM"
+                echo "##vso[task.setvariable variable=deploySource;isOutput=true]$DEPLOY_SOURCE"
+
+  # ---------------------------------------------------------------------------------------------------------------------
+  # STAGE: Plan
+  # ---------------------------------------------------------------------------------------------------------------------
+  - stage: Plan
+    displayName: '📋 Plan QAS'
+    dependsOn:
+      - PreCheck
+      - ResolveVersion
+    variables:
+      targetCommit: $[ stageDependencies.ResolveVersion.DetermineVersion.outputs['resolveVersion.targetCommit'] ]
+      targetVersion: $[ stageDependencies.ResolveVersion.DetermineVersion.outputs['resolveVersion.targetVersion'] ]
+    jobs:
+      - job: TerraformPlan
+        displayName: 'Terraform Plan'
+        steps:
+          - checkout: self
+            fetchDepth: 0
+
+          - task: Bash@3
+            displayName: 'Checkout Target Commit'
+            inputs:
+              targetType: inline
+              script: |
+                echo "Checking out commit: $(targetCommit)"
+                git checkout $(targetCommit)
+                echo "Current HEAD:"
+                git log -1 --oneline
+
+          - task: TerraformInstaller@1
+            displayName: 'Install Terraform'
+            inputs:
+              terraformVersion: 'latest'
+
+          - template: ../templates/security-scan.yml
+            parameters:
+              workingDirectory: $(moduleDirectory)
+              failOnHighSeverity: true
+
+          - template: ../templates/terraform-init.yml
+            parameters:
+              workingDirectory: $(workingDirectory)
+              environment: $(environment)
+              backendResourceGroup: $(backendResourceGroup)
+              backendStorageAccount: $(backendStorageAccount)
+              backendContainer: 'tfstate-$(environment)'
+              backendKey: '$(moduleName).tfstate'
+              managedIdentityClientId: $(managed-identity-client-id)
+
+          - template: ../templates/terraform-plan.yml
+            parameters:
+              workingDirectory: $(workingDirectory)
+              environment: $(environment)
+              subscriptionId: $(subscription-id)
+              managedIdentityClientId: $(managed-identity-client-id)
+              tfvarsFiles:
+                - environments/common.tfvars
+                - environments/$(environment).tfvars
+
+  # ---------------------------------------------------------------------------------------------------------------------
+  # STAGE: Apply (Azure Environment Approval)
+  # Approval is configured in Azure DevOps Environments, NOT in the pipeline YAML
+  # ---------------------------------------------------------------------------------------------------------------------
+  - stage: Apply
+    displayName: '🚀 Apply QAS'
+    dependsOn:
+      - ResolveVersion
+      - Plan
+    condition: succeeded()
+    variables:
+      targetCommit: $[ stageDependencies.ResolveVersion.DetermineVersion.outputs['resolveVersion.targetCommit'] ]
+      targetVersion: $[ stageDependencies.ResolveVersion.DetermineVersion.outputs['resolveVersion.targetVersion'] ]
+      promotedFrom: $[ stageDependencies.ResolveVersion.DetermineVersion.outputs['resolveVersion.promotedFrom'] ]
+      deploySource: $[ stageDependencies.ResolveVersion.DetermineVersion.outputs['resolveVersion.deploySource'] ]
+    jobs:
+      # Azure Environment 'databricks-config-qas' should have approvals configured in Azure DevOps:
+      # - Approvers: platform-admins group
+      # - Timeout: 72 hours
+      - deployment: TerraformApply
+        displayName: 'Terraform Apply'
+        environment: 'databricks-config-qas'  # Approval configured in Azure DevOps Environments
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - checkout: self
+                  fetchDepth: 0
+
+                - task: Bash@3
+                  displayName: 'Checkout Target Commit'
+                  inputs:
+                    targetType: inline
+                    script: |
+                      git checkout $(targetCommit)
+                      echo "Deploying commit: $(targetCommit)"
+
+                - task: TerraformInstaller@1
+                  displayName: 'Install Terraform'
+                  inputs:
+                    terraformVersion: 'latest'
+
+                - template: ../templates/terraform-init.yml
+                  parameters:
+                    workingDirectory: $(workingDirectory)
+                    environment: $(environment)
+                    backendResourceGroup: $(backendResourceGroup)
+                    backendStorageAccount: $(backendStorageAccount)
+                    backendContainer: 'tfstate-$(environment)'
+                    backendKey: '$(moduleName).tfstate'
+                    managedIdentityClientId: $(managed-identity-client-id)
+
+                - template: ../templates/terraform-apply.yml
+                  parameters:
+                    workingDirectory: $(workingDirectory)
+                    environment: $(environment)
+                    subscriptionId: $(subscription-id)
+                    managedIdentityClientId: $(managed-identity-client-id)
+
+                - template: ../templates/version-management.yml
+                  parameters:
+                    moduleName: $(moduleName)
+                    moduleDirectory: $(moduleDirectory)
+                    environment: $(environment)
+
+  # ---------------------------------------------------------------------------------------------------------------------
+  # STAGE: Post-Deploy
+  # ---------------------------------------------------------------------------------------------------------------------
+  - stage: PostDeploy
+    displayName: '✅ Post-Deploy QAS'
+    dependsOn: Apply
+    condition: succeeded()
+    variables:
+      targetVersion: $[ stageDependencies.ResolveVersion.DetermineVersion.outputs['resolveVersion.targetVersion'] ]
+    jobs:
+      - job: Summary
+        displayName: 'Deployment Summary'
+        steps:
+          - task: Bash@3
+            displayName: 'Summary'
+            inputs:
+              targetType: inline
+              script: |
+                echo "=============================================="
+                echo "🚀 QAS CONFIGURATION DEPLOYMENT COMPLETE"
+                echo "=============================================="
+                echo "Version: $(targetVersion)"
+                echo "Deployed By: $(Build.RequestedFor)"
+                echo "Build: $(Build.BuildNumber)"
+                echo "=============================================="
+                echo ""
+                echo "This configuration is now ready for PROD promotion."

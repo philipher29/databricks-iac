@@ -1,0 +1,43 @@
+# ---------------------------------------------------------------------------------------------------------------------
+# OUTPUTS
+# ---------------------------------------------------------------------------------------------------------------------
+
+output "groups" {
+  description = "Created Databricks groups"
+  value       = module.databricks_config.groups
+}
+
+output "storage_credentials" {
+  description = "Created storage credentials"
+  value       = module.databricks_config.storage_credentials
+}
+
+output "external_locations" {
+  description = "Created external locations"
+  value       = module.databricks_config.external_locations
+}
+
+output "catalogs" {
+  description = "Created catalogs"
+  value       = module.databricks_config.catalogs
+}
+
+output "schemas" {
+  description = "Created schemas"
+  value       = module.databricks_config.schemas
+}
+
+output "volumes" {
+  description = "Created volumes"
+  value       = module.databricks_config.volumes
+}
+
+output "cluster_policies" {
+  description = "Created cluster policies"
+  value       = module.databricks_config.cluster_policies
+}
+
+output "secret_scopes" {
+  description = "Created secret scopes"
+  value       = module.databricks_config.secret_scopes
+}

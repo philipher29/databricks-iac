@@ -1,0 +1,75 @@
+# ---------------------------------------------------------------------------------------------------------------------
+# TEST EXECUTION TEMPLATE
+# Runs unit and optionally integration tests
+# ---------------------------------------------------------------------------------------------------------------------
+
+parameters:
+  - name: moduleDirectory
+    type: string
+  - name: runIntegrationTests
+    type: boolean
+    default: false
+  - name: subscriptionId
+    type: string
+    default: ''
+  - name: managedIdentityClientId
+    type: string
+    default: ''
+
+steps:
+  - task: GoTool@0
+    displayName: 'Install Go'
+    inputs:
+      version: '1.21'
+
+  - task: Bash@3
+    displayName: 'Run Unit Tests'
+    inputs:
+      targetType: inline
+      workingDirectory: '${{ parameters.moduleDirectory }}/tests'
+      script: |
+        echo "Installing test dependencies..."
+        go mod download
+
+        echo "Running unit tests..."
+        go test -v -timeout 30m -run "^Test[^Integration]" ./... 2>&1 | tee unit-test-results.txt
+
+        # Generate JUnit report
+        go install github.com/jstemmer/go-junit-report/v2@latest
+        cat unit-test-results.txt | go-junit-report -set-exit-code > unit-test-results.xml
+
+  - task: PublishTestResults@2
+    displayName: 'Publish Unit Test Results'
+    inputs:
+      testResultsFormat: 'JUnit'
+      testResultsFiles: '${{ parameters.moduleDirectory }}/tests/unit-test-results.xml'
+      testRunTitle: 'Unit Tests'
+    condition: always()
+
+  - ${{ if eq(parameters.runIntegrationTests, true) }}:
+    - task: AzureCLI@2
+      displayName: 'Run Integration Tests'
+      inputs:
+        azureSubscription: 'integration-test-service-connection'
+        scriptType: bash
+        scriptLocation: inlineScript
+        workingDirectory: '${{ parameters.moduleDirectory }}/tests'
+        inlineScript: |
+          # Set up authentication
+          export ARM_USE_MSI=true
+          export ARM_SUBSCRIPTION_ID=${{ parameters.subscriptionId }}
+          export ARM_CLIENT_ID=${{ parameters.managedIdentityClientId }}
+          export INTEGRATION_TEST=true
+
+          echo "Running integration tests..."
+          go test -v -timeout 60m -run "TestIntegration" ./... 2>&1 | tee integration-test-results.txt
+
+          cat integration-test-results.txt | go-junit-report -set-exit-code > integration-test-results.xml
+
+    - task: PublishTestResults@2
+      displayName: 'Publish Integration Test Results'
+      inputs:
+        testResultsFormat: 'JUnit'
+        testResultsFiles: '${{ parameters.moduleDirectory }}/tests/integration-test-results.xml'
+        testRunTitle: 'Integration Tests'
+      condition: always()

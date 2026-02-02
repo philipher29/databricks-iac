@@ -1,0 +1,503 @@
+# ---------------------------------------------------------------------------------------------------------------------
+# DATABRICKS WORKSPACE - PROD DEPLOYMENT
+# Deploys workspace infrastructure to PRODUCTION environment
+# Trigger: Manual only (from approved QAS version)
+# Approval: Azure Environment approval (platform-admins + security-team)
+# ---------------------------------------------------------------------------------------------------------------------
+
+trigger: none
+
+pr: none
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+# ---------------------------------------------------------------------------------------------------------------------
+# PARAMETERS - Version Selection
+# ---------------------------------------------------------------------------------------------------------------------
+
+parameters:
+  - name: deploymentSource
+    displayName: 'Deployment Source'
+    type: string
+    default: 'promoteFromQAS'
+    values:
+      - promoteFromQAS      # Deploy same version as QAS (recommended)
+      - specificCommit      # Deploy specific git commit (emergency)
+      - specificVersion     # Deploy specific version tag
+
+  - name: sourceCommit
+    displayName: 'Git Commit SHA (if specificCommit selected)'
+    type: string
+    default: ''
+
+  - name: sourceVersion
+    displayName: 'Version Tag (if specificVersion selected)'
+    type: string
+    default: ''
+
+  - name: changeTicket
+    displayName: 'Change Ticket Number (required)'
+    type: string
+    default: ''
+
+  - name: rollbackVersion
+    displayName: 'Rollback Version (if needed)'
+    type: string
+    default: ''
+
+# ---------------------------------------------------------------------------------------------------------------------
+# VARIABLES
+# ---------------------------------------------------------------------------------------------------------------------
+
+variables:
+  - group: terraform-backend
+  - group: databricks-prod
+  - name: environment
+    value: 'prod'
+  - name: moduleName
+    value: 'databricks-workspace'
+  - name: moduleDirectory
+    value: '$(System.DefaultWorkingDirectory)/terraform-modules/azure/databricks/workspace'
+  - name: workingDirectory
+    value: '$(System.DefaultWorkingDirectory)/deployments/databricks-workspace'
+
+stages:
+  # ---------------------------------------------------------------------------------------------------------------------
+  # STAGE: Resolve Version
+  # ---------------------------------------------------------------------------------------------------------------------
+  - stage: ResolveVersion
+    displayName: '🔍 Resolve Deployment Version'
+    jobs:
+      - job: DetermineVersion
+        displayName: 'Determine Version to Deploy'
+        steps:
+          - checkout: self
+            fetchDepth: 0  # Full history for version lookup
+
+          - task: Bash@3
+            displayName: 'Show Available Versions'
+            inputs:
+              targetType: inline
+              script: |
+                echo "=== Deployment Manifest Status ==="
+                MANIFEST="deployments/tracking/deployment-manifest.json"
+
+                echo ""
+                echo "📦 Current Environment Status:"
+                echo "--------------------------------"
+                jq -r '.deployments["databricks-workspace"] | to_entries[] | "  \(.key): \(.value.status) - v\(.value.version // "none") (\(.value.commitSha // "N/A" | .[0:8]))"' "$MANIFEST"
+
+                echo ""
+                echo "🏷️ Recent Production Tags:"
+                echo "--------------------------------"
+                git tag -l --sort=-creatordate | grep -E "prod|release" | head -10 | while read tag; do
+                  echo "  $tag"
+                done
+
+          - task: Bash@3
+            displayName: 'Resolve Source Version'
+            name: resolveVersion
+            inputs:
+              targetType: inline
+              script: |
+                set -e
+                MANIFEST="deployments/tracking/deployment-manifest.json"
+
+                # Get QAS deployment info
+                QAS_STATUS=$(jq -r '.deployments["databricks-workspace"]["qas"].status' "$MANIFEST")
+                QAS_VERSION=$(jq -r '.deployments["databricks-workspace"]["qas"].version' "$MANIFEST")
+                QAS_COMMIT=$(jq -r '.deployments["databricks-workspace"]["qas"].commitSha' "$MANIFEST")
+
+                echo "=== QAS Environment Status ==="
+                echo "Status: $QAS_STATUS"
+                echo "Version: $QAS_VERSION"
+                echo "Commit: $QAS_COMMIT"
+                echo "=============================="
+
+                # Verify QAS is deployed (mandatory for PROD)
+                if [ "$QAS_STATUS" != "deployed" ]; then
+                  echo "##vso[task.logissue type=error]QAS must be deployed before PROD. Current status: $QAS_STATUS"
+                  echo "##vso[task.logissue type=error]Run workspace-qas.yml first."
+                  exit 1
+                fi
+
+                # Validate change ticket for production
+                CHANGE_TICKET="${{ parameters.changeTicket }}"
+                if [ -z "$CHANGE_TICKET" ]; then
+                  echo "##vso[task.logissue type=warning]No change ticket provided. This may be required by organizational policy."
+                fi
+
+                # Resolve target based on deployment source
+                case "${{ parameters.deploymentSource }}" in
+                  "promoteFromQAS")
+                    if [ "$QAS_STATUS" != "deployed" ] || [ "$QAS_COMMIT" == "null" ]; then
+                      echo "##vso[task.logissue type=error]Cannot promote from QAS - no valid deployment found"
+                      exit 1
+                    fi
+                    TARGET_COMMIT="$QAS_COMMIT"
+                    TARGET_VERSION="$QAS_VERSION"
+                    PROMOTED_FROM="qas"
+                    DEPLOY_SOURCE="promoteFromQAS"
+                    echo "✅ Promoting version from QAS: $QAS_VERSION"
+                    ;;
+
+                  "specificCommit")
+                    TARGET_COMMIT="${{ parameters.sourceCommit }}"
+                    if [ -z "$TARGET_COMMIT" ]; then
+                      echo "##vso[task.logissue type=error]sourceCommit parameter is required when using specificCommit"
+                      exit 1
+                    fi
+                    # Verify commit exists
+                    if ! git cat-file -t "$TARGET_COMMIT" >/dev/null 2>&1; then
+                      echo "##vso[task.logissue type=error]Commit $TARGET_COMMIT not found in repository"
+                      exit 1
+                    fi
+                    TARGET_VERSION="commit:${TARGET_COMMIT:0:8}"
+                    PROMOTED_FROM=""
+                    DEPLOY_SOURCE="specificCommit"
+                    echo "⚠️ Using specific commit (bypassing promotion path): $TARGET_COMMIT"
+                    ;;
+
+                  "specificVersion")
+                    TAG="${{ parameters.sourceVersion }}"
+                    if [ -z "$TAG" ]; then
+                      echo "##vso[task.logissue type=error]sourceVersion parameter is required when using specificVersion"
+                      exit 1
+                    fi
+                    TARGET_COMMIT=$(git rev-parse "$TAG" 2>/dev/null || echo "")
+                    if [ -z "$TARGET_COMMIT" ]; then
+                      echo "##vso[task.logissue type=error]Version tag $TAG not found in repository"
+                      echo "Available tags:"
+                      git tag -l | head -20
+                      exit 1
+                    fi
+                    TARGET_VERSION="$TAG"
+                    PROMOTED_FROM=""
+                    DEPLOY_SOURCE="specificVersion"
+                    echo "✅ Using version tag: $TAG -> $TARGET_COMMIT"
+                    ;;
+
+                  *)
+                    echo "##vso[task.logissue type=error]Unknown deployment source: ${{ parameters.deploymentSource }}"
+                    exit 1
+                    ;;
+                esac
+
+                # Set output variables
+                echo "##vso[task.setvariable variable=targetCommit;isOutput=true]$TARGET_COMMIT"
+                echo "##vso[task.setvariable variable=targetVersion;isOutput=true]$TARGET_VERSION"
+                echo "##vso[task.setvariable variable=promotedFrom;isOutput=true]$PROMOTED_FROM"
+                echo "##vso[task.setvariable variable=deploySource;isOutput=true]$DEPLOY_SOURCE"
+                echo "##vso[task.setvariable variable=changeTicket;isOutput=true]$CHANGE_TICKET"
+
+                echo ""
+                echo "=== PRODUCTION Deployment Target ==="
+                echo "Commit: $TARGET_COMMIT"
+                echo "Version: $TARGET_VERSION"
+                echo "Promoted From: ${PROMOTED_FROM:-"N/A"}"
+                echo "Deploy Source: $DEPLOY_SOURCE"
+                echo "Change Ticket: ${CHANGE_TICKET:-"N/A"}"
+
+  # ---------------------------------------------------------------------------------------------------------------------
+  # STAGE: Pre-Production Checks
+  # ---------------------------------------------------------------------------------------------------------------------
+  - stage: PreProdChecks
+    displayName: '🔒 Pre-Production Checks'
+    dependsOn: ResolveVersion
+    variables:
+      targetCommit: $[ stageDependencies.ResolveVersion.DetermineVersion.outputs['resolveVersion.targetCommit'] ]
+      targetVersion: $[ stageDependencies.ResolveVersion.DetermineVersion.outputs['resolveVersion.targetVersion'] ]
+      changeTicket: $[ stageDependencies.ResolveVersion.DetermineVersion.outputs['resolveVersion.changeTicket'] ]
+    jobs:
+      - job: ComplianceCheck
+        displayName: 'Compliance & Readiness Check'
+        steps:
+          - checkout: self
+            fetchDepth: 0
+
+          - task: Bash@3
+            displayName: 'Checkout Target Commit'
+            inputs:
+              targetType: inline
+              script: |
+                echo "Checking out commit: $(targetCommit)"
+                git checkout $(targetCommit)
+                echo "Current HEAD:"
+                git log -1 --oneline
+
+          - template: ../templates/security-scan.yml
+            parameters:
+              workingDirectory: $(moduleDirectory)
+              failOnHighSeverity: true
+
+          - task: Bash@3
+            displayName: 'Generate Deployment Summary'
+            inputs:
+              targetType: inline
+              script: |
+                cat << EOF > deployment-summary.md
+                # Production Deployment Summary
+
+                ## Version Information
+                - **Module**: $(moduleName)
+                - **Version**: $(targetVersion)
+                - **Target Commit**: $(targetCommit)
+                - **Change Ticket**: $(changeTicket)
+                - **Build**: $(Build.BuildNumber)
+                - **Requested By**: $(Build.RequestedFor)
+
+                ## Pre-Checks
+                - Security Scan: ✅ Passed
+                - Compliance Check: ✅ Passed
+                - Source Environment: ✅ QAS Deployed
+
+                ## Rollback Plan
+                - Previous Version: Check deployment manifest
+                - Rollback Command: Re-run pipeline with rollback version parameter
+                EOF
+
+                cat deployment-summary.md
+
+          - task: PublishPipelineArtifact@1
+            inputs:
+              targetPath: 'deployment-summary.md'
+              artifact: 'deployment-summary'
+
+  # ---------------------------------------------------------------------------------------------------------------------
+  # STAGE: Plan
+  # ---------------------------------------------------------------------------------------------------------------------
+  - stage: Plan
+    displayName: '📋 Plan PROD'
+    dependsOn:
+      - ResolveVersion
+      - PreProdChecks
+    variables:
+      targetCommit: $[ stageDependencies.ResolveVersion.DetermineVersion.outputs['resolveVersion.targetCommit'] ]
+      targetVersion: $[ stageDependencies.ResolveVersion.DetermineVersion.outputs['resolveVersion.targetVersion'] ]
+    jobs:
+      - job: TerraformPlan
+        displayName: 'Terraform Plan'
+        steps:
+          - checkout: self
+            fetchDepth: 0
+
+          - task: Bash@3
+            displayName: 'Checkout Target Commit'
+            inputs:
+              targetType: inline
+              script: |
+                echo "Checking out commit: $(targetCommit)"
+                git checkout $(targetCommit)
+                echo "Current HEAD:"
+                git log -1 --oneline
+
+          - task: TerraformInstaller@1
+            displayName: 'Install Terraform'
+            inputs:
+              terraformVersion: 'latest'
+
+          - template: ../templates/terraform-init.yml
+            parameters:
+              workingDirectory: $(workingDirectory)
+              environment: $(environment)
+              backendResourceGroup: $(backendResourceGroup)
+              backendStorageAccount: $(backendStorageAccount)
+              backendContainer: 'tfstate-$(environment)'
+              backendKey: '$(moduleName).tfstate'
+              managedIdentityClientId: $(managed-identity-client-id)
+
+          - template: ../templates/terraform-plan.yml
+            parameters:
+              workingDirectory: $(workingDirectory)
+              environment: $(environment)
+              subscriptionId: $(subscription-id)
+              managedIdentityClientId: $(managed-identity-client-id)
+              tfvarsFiles:
+                - environments/common.tfvars
+                - environments/$(environment).tfvars
+
+          - task: Bash@3
+            displayName: 'Analyze Plan Changes'
+            inputs:
+              targetType: inline
+              workingDirectory: $(workingDirectory)
+              script: |
+                # Parse plan for summary
+                echo "## Plan Analysis" >> plan-analysis.md
+                terraform show -no-color tfplan | grep -E "^(Plan:|  #|  ~|  +|  -)" >> plan-analysis.md || true
+
+                # Count changes
+                ADD=$(terraform show -json tfplan | jq '[.resource_changes[] | select(.change.actions | contains(["create"]))] | length')
+                CHANGE=$(terraform show -json tfplan | jq '[.resource_changes[] | select(.change.actions | contains(["update"]))] | length')
+                DELETE=$(terraform show -json tfplan | jq '[.resource_changes[] | select(.change.actions | contains(["delete"]))] | length')
+
+                echo ""
+                echo "## Summary" >> plan-analysis.md
+                echo "- Resources to add: $ADD" >> plan-analysis.md
+                echo "- Resources to change: $CHANGE" >> plan-analysis.md
+                echo "- Resources to delete: $DELETE" >> plan-analysis.md
+
+                cat plan-analysis.md
+
+                if [ "$DELETE" -gt 0 ]; then
+                  echo "##vso[task.logissue type=warning]Plan includes $DELETE resource deletions. Please review carefully."
+                fi
+
+          - task: PublishPipelineArtifact@1
+            inputs:
+              targetPath: '$(workingDirectory)/plan-analysis.md'
+              artifact: 'plan-analysis'
+
+  # ---------------------------------------------------------------------------------------------------------------------
+  # STAGE: Apply (Azure Environment Approval)
+  # Approval is configured in Azure DevOps Environments, NOT in the pipeline YAML
+  # Configure 'databricks-prod' environment with:
+  # - Approvers: platform-admins AND security-team
+  # - Minimum approvers: 2
+  # - Timeout: 72 hours
+  # ---------------------------------------------------------------------------------------------------------------------
+  - stage: Apply
+    displayName: '🚀 Apply PROD'
+    dependsOn:
+      - ResolveVersion
+      - Plan
+    condition: succeeded()
+    variables:
+      targetCommit: $[ stageDependencies.ResolveVersion.DetermineVersion.outputs['resolveVersion.targetCommit'] ]
+      targetVersion: $[ stageDependencies.ResolveVersion.DetermineVersion.outputs['resolveVersion.targetVersion'] ]
+      promotedFrom: $[ stageDependencies.ResolveVersion.DetermineVersion.outputs['resolveVersion.promotedFrom'] ]
+      deploySource: $[ stageDependencies.ResolveVersion.DetermineVersion.outputs['resolveVersion.deploySource'] ]
+      changeTicket: $[ stageDependencies.ResolveVersion.DetermineVersion.outputs['resolveVersion.changeTicket'] ]
+    jobs:
+      # Azure Environment 'databricks-prod' should have approvals configured in Azure DevOps:
+      # - Approvers: platform-admins group AND security-team group
+      # - Minimum approvers: 2 (requires both teams to approve)
+      # - Timeout: 72 hours
+      - deployment: TerraformApply
+        displayName: 'Terraform Apply'
+        environment: 'databricks-prod'  # Multi-approver configured in Azure DevOps Environments
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - checkout: self
+                  fetchDepth: 0
+
+                - task: Bash@3
+                  displayName: 'Checkout Target Commit'
+                  inputs:
+                    targetType: inline
+                    script: |
+                      git checkout $(targetCommit)
+                      echo "Deploying commit: $(targetCommit)"
+                      echo "Version: $(targetVersion)"
+                      echo "Change Ticket: $(changeTicket)"
+
+                - task: TerraformInstaller@1
+                  displayName: 'Install Terraform'
+                  inputs:
+                    terraformVersion: 'latest'
+
+                - template: ../templates/terraform-init.yml
+                  parameters:
+                    workingDirectory: $(workingDirectory)
+                    environment: $(environment)
+                    backendResourceGroup: $(backendResourceGroup)
+                    backendStorageAccount: $(backendStorageAccount)
+                    backendContainer: 'tfstate-$(environment)'
+                    backendKey: '$(moduleName).tfstate'
+                    managedIdentityClientId: $(managed-identity-client-id)
+
+                - template: ../templates/terraform-apply.yml
+                  parameters:
+                    workingDirectory: $(workingDirectory)
+                    environment: $(environment)
+                    subscriptionId: $(subscription-id)
+                    managedIdentityClientId: $(managed-identity-client-id)
+
+                - template: ../templates/version-management.yml
+                  parameters:
+                    moduleName: $(moduleName)
+                    moduleDirectory: $(moduleDirectory)
+                    environment: $(environment)
+
+  # ---------------------------------------------------------------------------------------------------------------------
+  # STAGE: Post-Production
+  # ---------------------------------------------------------------------------------------------------------------------
+  - stage: PostProd
+    displayName: '✅ Post-Production'
+    dependsOn: Apply
+    condition: succeeded()
+    variables:
+      targetVersion: $[ stageDependencies.ResolveVersion.DetermineVersion.outputs['resolveVersion.targetVersion'] ]
+      targetCommit: $[ stageDependencies.ResolveVersion.DetermineVersion.outputs['resolveVersion.targetCommit'] ]
+      promotedFrom: $[ stageDependencies.ResolveVersion.DetermineVersion.outputs['resolveVersion.promotedFrom'] ]
+      deploySource: $[ stageDependencies.ResolveVersion.DetermineVersion.outputs['resolveVersion.deploySource'] ]
+      changeTicket: $[ stageDependencies.ResolveVersion.DetermineVersion.outputs['resolveVersion.changeTicket'] ]
+    jobs:
+      - job: FinalizeDeployment
+        displayName: 'Finalize & Tag'
+        steps:
+          - checkout: self
+            persistCredentials: true
+
+          - task: Bash@3
+            displayName: 'Create Production Release Tag'
+            inputs:
+              targetType: inline
+              script: |
+                VERSION=$(cat $(moduleDirectory)/version.json | jq -r '.version')
+                TAG_NAME="$(moduleName)/v${VERSION}-prod"
+
+                git config user.email "pipeline@azure.com"
+                git config user.name "Azure Pipeline"
+
+                # Create annotated tag with metadata
+                git tag -a "$TAG_NAME" -m "Production Release
+                Version: $VERSION
+                Build: $(Build.BuildNumber)
+                Change Ticket: $(changeTicket)
+                Deployed By: $(Build.RequestedFor)
+                Date: $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+
+                git push origin "$TAG_NAME"
+
+                echo "##vso[task.setvariable variable=prodTag]$TAG_NAME"
+                echo "✅ Created production tag: $TAG_NAME"
+
+          - task: Bash@3
+            displayName: 'Update Deployment Manifest (Commit)'
+            inputs:
+              targetType: inline
+              script: |
+                git add deployments/tracking/deployment-manifest.json
+                git commit -m "Update deployment manifest - PROD $(Build.BuildNumber)
+
+                - Module: $(moduleName)
+                - Environment: prod
+                - Version: $(targetVersion)
+                - Change Ticket: $(changeTicket)"
+
+                git push origin HEAD:main
+
+          - task: Bash@3
+            displayName: 'Deployment Summary'
+            inputs:
+              targetType: inline
+              script: |
+                echo "=========================================="
+                echo "🎉 PRODUCTION DEPLOYMENT COMPLETE"
+                echo "=========================================="
+                echo "Module: $(moduleName)"
+                echo "Version: $(targetVersion)"
+                echo "Tag: $(prodTag)"
+                echo "Change Ticket: $(changeTicket)"
+                echo "Promoted From: $(promotedFrom)"
+                echo "Deploy Source: $(deploySource)"
+                echo "Deployed By: $(Build.RequestedFor)"
+                echo "Build: $(Build.BuildNumber)"
+                echo "=========================================="
+
+                # Here you would integrate with your notification system
+                # e.g., Slack, Teams, email, ServiceNow

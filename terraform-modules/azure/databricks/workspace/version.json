@@ -1,0 +1,20 @@
+{
+  "module": "databricks-workspace",
+  "version": "1.0.0",
+  "description": "Azure Databricks Workspace Infrastructure Module",
+  "changelog": {
+    "1.0.0": {
+      "date": "2025-01-30",
+      "changes": [
+        "Initial release",
+        "Azure Databricks workspace with VNet injection support",
+        "Access Connector for Unity Catalog",
+        "Private endpoint support for UI/API and browser auth"
+      ]
+    }
+  },
+  "compatibility": {
+    "terraform": ">= 1.5.0",
+    "azurerm": ">= 3.80.0"
+  }
+}

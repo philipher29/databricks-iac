@@ -1,0 +1,9 @@
+# github.com/claude-iac/databricks-workspace-tests [github.com/claude-iac/databricks-workspace-tests.test]
+./integration_test.go:44:8: undefined: azure.CreateResourceGroup
+./integration_test.go:45:14: undefined: azure.DeleteResourceGroup
+./integration_test.go:117:8: undefined: azure.CreateResourceGroup
+./integration_test.go:118:14: undefined: azure.DeleteResourceGroup
+./integration_test.go:160:8: undefined: azure.CreateResourceGroup
+./integration_test.go:161:14: undefined: azure.DeleteResourceGroup
+FAIL	github.com/claude-iac/databricks-workspace-tests [build failed]
+FAIL

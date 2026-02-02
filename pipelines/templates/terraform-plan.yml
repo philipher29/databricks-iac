@@ -1,0 +1,67 @@
+# ---------------------------------------------------------------------------------------------------------------------
+# TERRAFORM PLAN TEMPLATE
+# Reusable template for Terraform plan operations
+# ---------------------------------------------------------------------------------------------------------------------
+
+parameters:
+  - name: workingDirectory
+    type: string
+  - name: environment
+    type: string
+  - name: subscriptionId
+    type: string
+  - name: managedIdentityClientId
+    type: string
+  - name: tfvarsFiles
+    type: object
+    default: []
+  - name: additionalArgs
+    type: string
+    default: ''
+
+steps:
+  - task: AzureCLI@2
+    displayName: 'Terraform Plan'
+    inputs:
+      azureSubscription: ${{ parameters.environment }}-service-connection
+      scriptType: bash
+      scriptLocation: inlineScript
+      workingDirectory: ${{ parameters.workingDirectory }}
+      addSpnToEnvironment: false
+      inlineScript: |
+        # Use managed identity for Azure provider
+        export ARM_USE_MSI=true
+        export ARM_CLIENT_ID=${{ parameters.managedIdentityClientId }}
+        export ARM_SUBSCRIPTION_ID=${{ parameters.subscriptionId }}
+
+        # Build tfvars arguments
+        TFVARS_ARGS=""
+        for tfvars in ${{ join(' ', parameters.tfvarsFiles) }}; do
+          TFVARS_ARGS="$TFVARS_ARGS -var-file=$tfvars"
+        done
+
+        # Run plan
+        terraform plan \
+          -var="subscription_id=${{ parameters.subscriptionId }}" \
+          -var="managed_identity_client_id=${{ parameters.managedIdentityClientId }}" \
+          $TFVARS_ARGS \
+          ${{ parameters.additionalArgs }} \
+          -out=tfplan \
+          -input=false
+
+        # Show plan summary
+        terraform show -no-color tfplan > tfplan.txt
+
+  - task: PublishPipelineArtifact@1
+    displayName: 'Publish Plan Artifact'
+    inputs:
+      targetPath: '${{ parameters.workingDirectory }}/tfplan'
+      artifact: 'tfplan-${{ parameters.environment }}'
+      publishLocation: 'pipeline'
+
+  - task: PublishPipelineArtifact@1
+    displayName: 'Publish Plan Summary'
+    inputs:
+      targetPath: '${{ parameters.workingDirectory }}/tfplan.txt'
+      artifact: 'tfplan-summary-${{ parameters.environment }}'
+      publishLocation: 'pipeline'

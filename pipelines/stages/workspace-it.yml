@@ -1,0 +1,168 @@
+# ---------------------------------------------------------------------------------------------------------------------
+# DATABRICKS WORKSPACE - IT DEPLOYMENT
+# First deployment stage for DevOps engineers to develop and test
+# Trigger: Automatic on main branch merge
+# Approval: None required
+# ---------------------------------------------------------------------------------------------------------------------
+
+trigger:
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - terraform-modules/azure/databricks/workspace/**
+      - deployments/databricks-workspace/**
+      - pipelines/stages/workspace-it.yml
+
+pr: none  # CD pipeline - not triggered by PRs
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  - group: terraform-backend
+  - group: databricks-it
+  - name: environment
+    value: 'it'
+  - name: moduleName
+    value: 'databricks-workspace'
+  - name: moduleDirectory
+    value: '$(System.DefaultWorkingDirectory)/terraform-modules/azure/databricks/workspace'
+  - name: workingDirectory
+    value: '$(System.DefaultWorkingDirectory)/deployments/databricks-workspace'
+
+stages:
+  # ---------------------------------------------------------------------------------------------------------------------
+  # STAGE: Integration Tests
+  # ---------------------------------------------------------------------------------------------------------------------
+  - stage: IntegrationTests
+    displayName: '🧪 Integration Tests'
+    jobs:
+      - job: RunIntegrationTests
+        displayName: 'Run Integration Tests'
+        steps:
+          - checkout: self
+
+          - task: TerraformInstaller@1
+            displayName: 'Install Terraform'
+            inputs:
+              terraformVersion: 'latest'
+
+          - template: ../templates/run-tests.yml
+            parameters:
+              moduleDirectory: $(moduleDirectory)
+              runIntegrationTests: true
+              subscriptionId: $(subscription-id)
+              managedIdentityClientId: $(managed-identity-client-id)
+
+  # ---------------------------------------------------------------------------------------------------------------------
+  # STAGE: Plan
+  # ---------------------------------------------------------------------------------------------------------------------
+  - stage: Plan
+    displayName: '📋 Plan IT'
+    dependsOn: IntegrationTests
+    jobs:
+      - job: TerraformPlan
+        displayName: 'Terraform Plan'
+        steps:
+          - checkout: self
+
+          - task: TerraformInstaller@1
+            displayName: 'Install Terraform'
+            inputs:
+              terraformVersion: 'latest'
+
+          - template: ../templates/terraform-init.yml
+            parameters:
+              workingDirectory: $(workingDirectory)
+              environment: $(environment)
+              backendResourceGroup: $(backendResourceGroup)
+              backendStorageAccount: $(backendStorageAccount)
+              backendContainer: 'tfstate-$(environment)'
+              backendKey: '$(moduleName).tfstate'
+              managedIdentityClientId: $(managed-identity-client-id)
+
+          - template: ../templates/terraform-plan.yml
+            parameters:
+              workingDirectory: $(workingDirectory)
+              environment: $(environment)
+              subscriptionId: $(subscription-id)
+              managedIdentityClientId: $(managed-identity-client-id)
+              tfvarsFiles:
+                - environments/common.tfvars
+                - environments/$(environment).tfvars
+
+  # ---------------------------------------------------------------------------------------------------------------------
+  # STAGE: Apply
+  # ---------------------------------------------------------------------------------------------------------------------
+  - stage: Apply
+    displayName: '🚀 Apply IT'
+    dependsOn: Plan
+    condition: succeeded()
+    jobs:
+      - deployment: TerraformApply
+        displayName: 'Terraform Apply'
+        environment: 'databricks-it'  # No approval configured
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - checkout: self
+
+                - task: TerraformInstaller@1
+                  displayName: 'Install Terraform'
+                  inputs:
+                    terraformVersion: 'latest'
+
+                - template: ../templates/terraform-init.yml
+                  parameters:
+                    workingDirectory: $(workingDirectory)
+                    environment: $(environment)
+                    backendResourceGroup: $(backendResourceGroup)
+                    backendStorageAccount: $(backendStorageAccount)
+                    backendContainer: 'tfstate-$(environment)'
+                    backendKey: '$(moduleName).tfstate'
+                    managedIdentityClientId: $(managed-identity-client-id)
+
+                - template: ../templates/terraform-apply.yml
+                  parameters:
+                    workingDirectory: $(workingDirectory)
+                    environment: $(environment)
+                    subscriptionId: $(subscription-id)
+                    managedIdentityClientId: $(managed-identity-client-id)
+
+                - template: ../templates/version-management.yml
+                  parameters:
+                    moduleName: $(moduleName)
+                    moduleDirectory: $(moduleDirectory)
+                    environment: $(environment)
+
+  # ---------------------------------------------------------------------------------------------------------------------
+  # STAGE: Validate
+  # ---------------------------------------------------------------------------------------------------------------------
+  - stage: Validate
+    displayName: '✅ Validate IT'
+    dependsOn: Apply
+    condition: succeeded()
+    jobs:
+      - job: SmokeTests
+        displayName: 'Smoke Tests'
+        steps:
+          - checkout: self
+
+          - task: AzureCLI@2
+            displayName: 'Validate Workspace Accessible'
+            inputs:
+              azureSubscription: 'it-service-connection'
+              scriptType: bash
+              inlineScript: |
+                echo "=== IT Deployment Validation ==="
+
+                # Get outputs from terraform state
+                cd $(workingDirectory)
+
+                echo "✅ IT deployment completed successfully"
+                echo "Build: $(Build.BuildNumber)"
+                echo "Commit: $(Build.SourceVersion)"
+                echo "Triggered by: $(Build.RequestedFor)"

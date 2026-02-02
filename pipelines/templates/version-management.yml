@@ -1,0 +1,140 @@
+# ---------------------------------------------------------------------------------------------------------------------
+# VERSION MANAGEMENT TEMPLATE
+# Handles version extraction, tagging, and deployment tracking
+# Supports promotion tracking for IT → DEV → QAS → PROD flow
+# ---------------------------------------------------------------------------------------------------------------------
+
+parameters:
+  - name: moduleName
+    type: string
+  - name: moduleDirectory
+    type: string
+  - name: environment
+    type: string
+  # Optional parameters for promotion tracking
+  - name: promotedFrom
+    type: string
+    default: ''
+  - name: deploymentSource
+    type: string
+    default: 'direct'
+  - name: changeTicket
+    type: string
+    default: ''
+
+steps:
+  - task: Bash@3
+    displayName: 'Extract Module Version'
+    name: extractVersion
+    inputs:
+      targetType: inline
+      script: |
+        # Read version from version.json
+        VERSION=$(cat ${{ parameters.moduleDirectory }}/version.json | jq -r '.version')
+        echo "##vso[task.setvariable variable=moduleVersion;isOutput=true]$VERSION"
+        echo "Module version: $VERSION"
+
+        # Generate deployment version with build number
+        DEPLOY_VERSION="${VERSION}-$(Build.BuildNumber)"
+        echo "##vso[task.setvariable variable=deployVersion;isOutput=true]$DEPLOY_VERSION"
+        echo "Deploy version: $DEPLOY_VERSION"
+
+  - task: Bash@3
+    displayName: 'Update Deployment Manifest'
+    inputs:
+      targetType: inline
+      script: |
+        MANIFEST_FILE="$(System.DefaultWorkingDirectory)/deployments/tracking/deployment-manifest.json"
+        TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+        # Get parameters (use pipeline variables if available, otherwise use template defaults)
+        PROMOTED_FROM="${PROMOTED_FROM:-${{ parameters.promotedFrom }}}"
+        DEPLOY_SOURCE="${DEPLOY_SOURCE:-${{ parameters.deploymentSource }}}"
+        CHANGE_TICKET="${CHANGE_TICKET:-${{ parameters.changeTicket }}}"
+
+        # Handle empty strings as null for JSON
+        if [ -z "$PROMOTED_FROM" ]; then
+          PROMOTED_FROM="null"
+        else
+          PROMOTED_FROM="\"$PROMOTED_FROM\""
+        fi
+
+        if [ -z "$DEPLOY_SOURCE" ] || [ "$DEPLOY_SOURCE" == "direct" ]; then
+          DEPLOY_SOURCE="\"direct\""
+        else
+          DEPLOY_SOURCE="\"$DEPLOY_SOURCE\""
+        fi
+
+        if [ -z "$CHANGE_TICKET" ]; then
+          CHANGE_TICKET="null"
+        else
+          CHANGE_TICKET="\"$CHANGE_TICKET\""
+        fi
+
+        # Build the deployment object based on environment
+        if [ "${{ parameters.environment }}" == "prod" ]; then
+          # Production includes change ticket
+          jq --arg module "${{ parameters.moduleName }}" \
+             --arg env "${{ parameters.environment }}" \
+             --arg version "$(extractVersion.deployVersion)" \
+             --arg timestamp "$TIMESTAMP" \
+             --arg user "$(Build.RequestedFor)" \
+             --arg commit "$(Build.SourceVersion)" \
+             --arg runId "$(Build.BuildId)" \
+             --argjson promotedFrom "$PROMOTED_FROM" \
+             --argjson deploySource "$DEPLOY_SOURCE" \
+             --argjson changeTicket "$CHANGE_TICKET" \
+             '.deployments[$module][$env] = {
+                "version": $version,
+                "deployedAt": $timestamp,
+                "deployedBy": $user,
+                "commitSha": $commit,
+                "pipelineRunId": $runId,
+                "status": "deployed",
+                "promotedFrom": $promotedFrom,
+                "deploymentSource": $deploySource,
+                "changeTicket": $changeTicket
+              } | .lastUpdated = $timestamp' \
+             "$MANIFEST_FILE" > "$MANIFEST_FILE.tmp" && mv "$MANIFEST_FILE.tmp" "$MANIFEST_FILE"
+        else
+          # Non-production environments
+          jq --arg module "${{ parameters.moduleName }}" \
+             --arg env "${{ parameters.environment }}" \
+             --arg version "$(extractVersion.deployVersion)" \
+             --arg timestamp "$TIMESTAMP" \
+             --arg user "$(Build.RequestedFor)" \
+             --arg commit "$(Build.SourceVersion)" \
+             --arg runId "$(Build.BuildId)" \
+             --argjson promotedFrom "$PROMOTED_FROM" \
+             --argjson deploySource "$DEPLOY_SOURCE" \
+             '.deployments[$module][$env] = {
+                "version": $version,
+                "deployedAt": $timestamp,
+                "deployedBy": $user,
+                "commitSha": $commit,
+                "pipelineRunId": $runId,
+                "status": "deployed",
+                "promotedFrom": $promotedFrom,
+                "deploymentSource": $deploySource
+              } | .lastUpdated = $timestamp' \
+             "$MANIFEST_FILE" > "$MANIFEST_FILE.tmp" && mv "$MANIFEST_FILE.tmp" "$MANIFEST_FILE"
+        fi
+
+        echo "Updated deployment manifest:"
+        cat "$MANIFEST_FILE" | jq ".deployments[\"${{ parameters.moduleName }}\"][\"${{ parameters.environment }}\"]"
+
+        echo ""
+        echo "=== Deployment Summary ==="
+        echo "Module: ${{ parameters.moduleName }}"
+        echo "Environment: ${{ parameters.environment }}"
+        echo "Version: $(extractVersion.deployVersion)"
+        echo "Commit: $(Build.SourceVersion)"
+        echo "Promoted From: ${PROMOTED_FROM}"
+        echo "Deploy Source: ${DEPLOY_SOURCE}"
+
+  - task: PublishPipelineArtifact@1
+    displayName: 'Publish Updated Manifest'
+    inputs:
+      targetPath: '$(System.DefaultWorkingDirectory)/deployments/tracking/deployment-manifest.json'
+      artifact: 'deployment-manifest-${{ parameters.environment }}'
+      publishLocation: 'pipeline'

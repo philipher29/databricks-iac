@@ -1,0 +1,24 @@
+{
+  "module": "databricks-configuration",
+  "version": "1.0.0",
+  "description": "Azure Databricks Configuration Module",
+  "changelog": {
+    "1.0.0": {
+      "date": "2025-01-30",
+      "changes": [
+        "Initial release",
+        "Groups and membership management",
+        "Unity Catalog: storage credentials, external locations",
+        "Catalogs and schemas with grants",
+        "Managed and external volumes",
+        "Cluster policies with governance",
+        "Secret scopes (native and Key Vault backed)",
+        "IP access lists"
+      ]
+    }
+  },
+  "compatibility": {
+    "terraform": ">= 1.5.0",
+    "databricks": ">= 1.30.0"
+  }
+}

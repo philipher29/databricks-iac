@@ -1,0 +1,195 @@
+# ---------------------------------------------------------------------------------------------------------------------
+# DATABRICKS CONFIGURATION - IT DEPLOYMENT
+# First deployment stage for DevOps engineers to develop and test configuration
+# Trigger: Automatic on main branch merge
+# Approval: None required
+# Dependency: Requires workspace to be deployed first
+# ---------------------------------------------------------------------------------------------------------------------
+
+trigger:
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - terraform-modules/azure/databricks/configuration/**
+      - deployments/databricks-config/**
+      - pipelines/stages/config-it.yml
+
+pr: none  # CD pipeline - not triggered by PRs
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  - group: terraform-backend
+  - group: databricks-it
+  - name: environment
+    value: 'it'
+  - name: moduleName
+    value: 'databricks-config'
+  - name: moduleDirectory
+    value: '$(System.DefaultWorkingDirectory)/terraform-modules/azure/databricks/configuration'
+  - name: workingDirectory
+    value: '$(System.DefaultWorkingDirectory)/deployments/databricks-config'
+
+stages:
+  # ---------------------------------------------------------------------------------------------------------------------
+  # STAGE: Pre-Check
+  # ---------------------------------------------------------------------------------------------------------------------
+  - stage: PreCheck
+    displayName: '🔍 Pre-Check'
+    jobs:
+      - job: VerifyWorkspace
+        displayName: 'Verify Workspace Deployed'
+        steps:
+          - checkout: self
+
+          - task: Bash@3
+            displayName: 'Check Workspace Status'
+            inputs:
+              targetType: inline
+              script: |
+                MANIFEST="deployments/tracking/deployment-manifest.json"
+                WS_STATUS=$(jq -r '.deployments["databricks-workspace"]["it"].status' "$MANIFEST")
+
+                echo "Workspace status in IT: $WS_STATUS"
+
+                if [ "$WS_STATUS" != "deployed" ]; then
+                  echo "##vso[task.logissue type=error]Workspace must be deployed before configuration. Current status: $WS_STATUS"
+                  echo "##vso[task.logissue type=error]Run workspace-it.yml first"
+                  exit 1
+                fi
+
+                echo "✅ Workspace is deployed, proceeding with configuration"
+
+  # ---------------------------------------------------------------------------------------------------------------------
+  # STAGE: Unit Tests
+  # ---------------------------------------------------------------------------------------------------------------------
+  - stage: UnitTests
+    displayName: '🧪 Unit Tests'
+    dependsOn: PreCheck
+    jobs:
+      - job: RunTests
+        displayName: 'Run Unit Tests'
+        steps:
+          - checkout: self
+
+          - task: TerraformInstaller@1
+            displayName: 'Install Terraform'
+            inputs:
+              terraformVersion: 'latest'
+
+          - template: ../templates/run-tests.yml
+            parameters:
+              moduleDirectory: $(moduleDirectory)
+              runIntegrationTests: false
+              subscriptionId: $(subscription-id)
+              managedIdentityClientId: $(managed-identity-client-id)
+
+  # ---------------------------------------------------------------------------------------------------------------------
+  # STAGE: Plan
+  # ---------------------------------------------------------------------------------------------------------------------
+  - stage: Plan
+    displayName: '📋 Plan IT'
+    dependsOn: UnitTests
+    jobs:
+      - job: TerraformPlan
+        displayName: 'Terraform Plan'
+        steps:
+          - checkout: self
+
+          - task: TerraformInstaller@1
+            displayName: 'Install Terraform'
+            inputs:
+              terraformVersion: 'latest'
+
+          - template: ../templates/terraform-init.yml
+            parameters:
+              workingDirectory: $(workingDirectory)
+              environment: $(environment)
+              backendResourceGroup: $(backendResourceGroup)
+              backendStorageAccount: $(backendStorageAccount)
+              backendContainer: 'tfstate-$(environment)'
+              backendKey: '$(moduleName).tfstate'
+              managedIdentityClientId: $(managed-identity-client-id)
+
+          - template: ../templates/terraform-plan.yml
+            parameters:
+              workingDirectory: $(workingDirectory)
+              environment: $(environment)
+              subscriptionId: $(subscription-id)
+              managedIdentityClientId: $(managed-identity-client-id)
+              tfvarsFiles:
+                - environments/common.tfvars
+                - environments/$(environment).tfvars
+
+  # ---------------------------------------------------------------------------------------------------------------------
+  # STAGE: Apply
+  # ---------------------------------------------------------------------------------------------------------------------
+  - stage: Apply
+    displayName: '🚀 Apply IT'
+    dependsOn: Plan
+    condition: succeeded()
+    jobs:
+      - deployment: TerraformApply
+        displayName: 'Terraform Apply'
+        environment: 'databricks-config-it'  # No approval configured
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - checkout: self
+
+                - task: TerraformInstaller@1
+                  displayName: 'Install Terraform'
+                  inputs:
+                    terraformVersion: 'latest'
+
+                - template: ../templates/terraform-init.yml
+                  parameters:
+                    workingDirectory: $(workingDirectory)
+                    environment: $(environment)
+                    backendResourceGroup: $(backendResourceGroup)
+                    backendStorageAccount: $(backendStorageAccount)
+                    backendContainer: 'tfstate-$(environment)'
+                    backendKey: '$(moduleName).tfstate'
+                    managedIdentityClientId: $(managed-identity-client-id)
+
+                - template: ../templates/terraform-apply.yml
+                  parameters:
+                    workingDirectory: $(workingDirectory)
+                    environment: $(environment)
+                    subscriptionId: $(subscription-id)
+                    managedIdentityClientId: $(managed-identity-client-id)
+
+                - template: ../templates/version-management.yml
+                  parameters:
+                    moduleName: $(moduleName)
+                    moduleDirectory: $(moduleDirectory)
+                    environment: $(environment)
+
+  # ---------------------------------------------------------------------------------------------------------------------
+  # STAGE: Validate
+  # ---------------------------------------------------------------------------------------------------------------------
+  - stage: Validate
+    displayName: '✅ Validate IT'
+    dependsOn: Apply
+    condition: succeeded()
+    jobs:
+      - job: SmokeTests
+        displayName: 'Smoke Tests'
+        steps:
+          - checkout: self
+
+          - task: Bash@3
+            displayName: 'Validation Summary'
+            inputs:
+              targetType: inline
+              script: |
+                echo "=== IT Configuration Deployment Complete ==="
+                echo "Build: $(Build.BuildNumber)"
+                echo "Commit: $(Build.SourceVersion)"
+                echo "Triggered by: $(Build.RequestedFor)"
+                echo ""
+                echo "✅ Configuration is ready for DEV promotion"

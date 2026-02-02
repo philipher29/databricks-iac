@@ -1,0 +1,74 @@
+# ---------------------------------------------------------------------------------------------------------------------
+# SECURITY SCANNING TEMPLATE
+# Runs tfsec and checkov for security compliance
+# ---------------------------------------------------------------------------------------------------------------------
+
+parameters:
+  - name: workingDirectory
+    type: string
+  - name: failOnHighSeverity
+    type: boolean
+    default: true
+
+steps:
+  - task: Bash@3
+    displayName: 'Install Security Tools'
+    inputs:
+      targetType: inline
+      script: |
+        # Install tfsec
+        curl -s https://raw.githubusercontent.com/aquasecurity/tfsec/master/scripts/install_linux.sh | bash
+
+        # Install checkov
+        pip install checkov
+
+  - task: Bash@3
+    displayName: 'Run tfsec'
+    continueOnError: ${{ not(parameters.failOnHighSeverity) }}
+    inputs:
+      targetType: inline
+      workingDirectory: ${{ parameters.workingDirectory }}
+      script: |
+        echo "Running tfsec security scan..."
+        tfsec . --format=json --out=tfsec-results.json || true
+        tfsec . --format=sarif --out=tfsec-results.sarif || true
+
+        # Check for high/critical issues
+        HIGH_COUNT=$(cat tfsec-results.json | jq '[.results[] | select(.severity == "HIGH" or .severity == "CRITICAL")] | length')
+        echo "High/Critical issues found: $HIGH_COUNT"
+
+        if [ "$HIGH_COUNT" -gt 0 ] && [ "${{ parameters.failOnHighSeverity }}" == "true" ]; then
+          echo "##vso[task.logissue type=error]Found $HIGH_COUNT high/critical security issues"
+          tfsec . --format=lovely
+          exit 1
+        fi
+
+        tfsec . --format=lovely
+
+  - task: Bash@3
+    displayName: 'Run Checkov'
+    continueOnError: ${{ not(parameters.failOnHighSeverity) }}
+    inputs:
+      targetType: inline
+      workingDirectory: ${{ parameters.workingDirectory }}
+      script: |
+        echo "Running Checkov compliance scan..."
+        checkov -d . --output-file-path . --output=json --output=sarif || true
+
+        # Parse results
+        if [ -f results_json.json ]; then
+          FAILED=$(cat results_json.json | jq '.results.failed_checks | length')
+          echo "Failed checks: $FAILED"
+
+          # Show summary
+          checkov -d . --compact --quiet || true
+        fi
+
+  - task: PublishPipelineArtifact@1
+    displayName: 'Publish Security Scan Results'
+    condition: always()
+    inputs:
+      targetPath: '${{ parameters.workingDirectory }}'
+      artifact: 'security-scan-results'
+      publishLocation: 'pipeline'
+    continueOnError: true
