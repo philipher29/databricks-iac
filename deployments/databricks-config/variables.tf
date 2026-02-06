@@ -1,15 +1,54 @@
 # ---------------------------------------------------------------------------------------------------------------------
 # AUTHENTICATION VARIABLES
+# Supports MSI (recommended for pipelines), Azure CLI (local dev), or Service Principal
 # ---------------------------------------------------------------------------------------------------------------------
 
 variable "subscription_id" {
   description = "Azure subscription ID for deployment"
   type        = string
+  sensitive   = true
+
+  validation {
+    condition     = can(regex("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", var.subscription_id))
+    error_message = "Subscription ID must be a valid UUID format."
+  }
+}
+
+variable "tenant_id" {
+  description = "Azure tenant ID (required for Service Principal auth, optional for MSI)"
+  type        = string
+  default     = null
+  sensitive   = true
+
+  validation {
+    condition     = var.tenant_id == null || can(regex("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", var.tenant_id))
+    error_message = "Tenant ID must be a valid UUID format when provided."
+  }
+}
+
+variable "use_msi" {
+  description = "Use Managed Service Identity for authentication. Set to false to use Azure CLI or Service Principal."
+  type        = bool
+  default     = true
 }
 
 variable "managed_identity_client_id" {
-  description = "Client ID of the managed identity used for authentication"
+  description = "Client ID of the managed identity (required when use_msi=true)"
   type        = string
+  default     = null
+  sensitive   = true
+
+  validation {
+    condition     = var.managed_identity_client_id == null || can(regex("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", var.managed_identity_client_id))
+    error_message = "Managed identity client ID must be a valid UUID format when provided."
+  }
+}
+
+variable "client_secret" {
+  description = "Client secret for Service Principal authentication (required when use_msi=false and not using Azure CLI)"
+  type        = string
+  default     = null
+  sensitive   = true
 }
 
 # ---------------------------------------------------------------------------------------------------------------------

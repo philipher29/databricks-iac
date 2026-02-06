@@ -205,14 +205,14 @@ volumes = {
 
 # ---------------------------------------------------------------------------------------------------------------------
 # SECRET SCOPES (Key Vault backed in production)
+# NOTE: Key Vault resource IDs are constructed dynamically using subscription_id variable
 # ---------------------------------------------------------------------------------------------------------------------
 
 secret_scopes = {
   prod_secrets = {
-    keyvault_metadata = {
-      resource_id = "/subscriptions/xxx/resourceGroups/rg-databricks-prod/providers/Microsoft.KeyVault/vaults/kv-databricks-prod"
-      dns_name    = "https://kv-databricks-prod.vault.azure.net/"
-    }
+    # Key Vault-backed secret scope - subscription ID injected via keyvault_resource_id variable
+    keyvault_name = "kv-databricks-prod"
+    keyvault_rg   = "rg-databricks-prod" # Optional, defaults to resource_group_name
     acls = [
       { principal = "Data Engineers", permission = "READ" },
       { principal = "Data Scientists", permission = "READ" },
@@ -220,10 +220,9 @@ secret_scopes = {
     ]
   }
   prod_service_connections = {
-    keyvault_metadata = {
-      resource_id = "/subscriptions/xxx/resourceGroups/rg-databricks-prod/providers/Microsoft.KeyVault/vaults/kv-databricks-svc-prod"
-      dns_name    = "https://kv-databricks-svc-prod.vault.azure.net/"
-    }
+    # Separate Key Vault for service connection secrets
+    keyvault_name = "kv-databricks-svc-prod"
+    keyvault_rg   = "rg-databricks-prod" # Optional, defaults to resource_group_name
     acls = [
       { principal = "Platform Admins", permission = "MANAGE" }
     ]
@@ -232,17 +231,19 @@ secret_scopes = {
 
 # ---------------------------------------------------------------------------------------------------------------------
 # IP ACCESS LISTS (strict in production)
+# IMPORTANT: Replace placeholder IP ranges with your actual corporate network and VPN IP addresses
 # ---------------------------------------------------------------------------------------------------------------------
 
 ip_access_lists = {
   corporate_network = {
     list_type    = "ALLOW"
-    ip_addresses = ["10.0.0.0/8"]
+    ip_addresses = ["10.0.0.0/8"] # RFC 1918 private network - update with your actual ranges
     enabled      = true
   }
-  vpn_gateway = {
-    list_type    = "ALLOW"
-    ip_addresses = ["203.0.113.0/24"] # Replace with actual VPN IPs
-    enabled      = true
-  }
+  # TODO: Replace with your actual VPN gateway public IP addresses
+  # vpn_gateway = {
+  #   list_type    = "ALLOW"
+  #   ip_addresses = ["YOUR.VPN.IP.RANGE/CIDR"]  # Example: ["198.51.100.0/24"]
+  #   enabled      = true
+  # }
 }

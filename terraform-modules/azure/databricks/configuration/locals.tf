@@ -167,6 +167,16 @@ locals {
         permission    = grant.permission
       }
     ]],
+    # Cluster grants
+    [for cluster_key, cluster in var.clusters : [
+      for grant in coalesce(cluster.grants, []) : {
+        key           = "cluster-${cluster_key}-${grant.principal}"
+        resource_type = "cluster"
+        resource_key  = cluster_key
+        principal     = grant.principal
+        permission    = grant.permission
+      }
+    ]],
     # Secret scope ACLs
     [for scope_key, scope in var.secret_scopes : [
       for acl in coalesce(scope.acls, []) : {
@@ -192,6 +202,7 @@ locals {
   managed_volume_grants      = { for g in lookup(local.grants_by_type, "volume_managed", []) : g.key => g }
   external_volume_grants     = { for g in lookup(local.grants_by_type, "volume_external", []) : g.key => g }
   cluster_policy_permissions = { for g in lookup(local.grants_by_type, "cluster_policy", []) : g.key => g }
+  cluster_permissions        = { for g in lookup(local.grants_by_type, "cluster", []) : g.key => g }
   secret_scope_acls          = { for g in lookup(local.grants_by_type, "secret_scope", []) : g.key => g }
 }
 

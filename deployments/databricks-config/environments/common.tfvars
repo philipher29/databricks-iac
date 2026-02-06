@@ -113,3 +113,63 @@ cluster_policies = {
 # keyvault_name                       = "kv-databricks-<env>"
 # crossplane_sp_secret_name           = "crossplane-sp-client-id"
 # crossplane_sp_groups                = ["platform_admins"]
+
+# ---------------------------------------------------------------------------------------------------------------------
+# DATABRICKS CLUSTERS
+# Compute resources for running workloads (notebooks, jobs, SQL)
+# Note: Can reference cluster policies by key (from cluster_policies above) or by policy ID
+# ---------------------------------------------------------------------------------------------------------------------
+
+# Uncomment and customize for your environment:
+# clusters = {
+#   data_eng_standard = {
+#     spark_version      = "13.3.x-scala2.12"
+#     node_type_id       = "Standard_DS4_v2"  # Azure node type
+#     driver_node_type_id = "Standard_DS4_v2"
+#     num_workers        = 2
+#     autotermination_minutes = 30
+#     enable_elastic_disk = true
+#     policy_id          = "data_engineering"  # Reference by key
+#     custom_tags = {
+#       Environment = "shared"
+#       Team        = "data_engineering"
+#     }
+#     spark_conf = {
+#       "spark.databricks.cluster.profile" = "singleNode"
+#     }
+#     grants = [
+#       { principal = "Data Engineers", permission = "ATTACH_TO" }
+#     ]
+#   }
+#
+#   data_science_gpu = {
+#     spark_version      = "13.3.x-gpu-scala2.12"
+#     node_type_id       = "Standard_NC24s_v3"  # GPU node type
+#     num_workers        = 1
+#     min_workers        = 1
+#     max_workers        = 4
+#     autotermination_minutes = 60
+#     policy_id          = "data_science"
+#     custom_tags = {
+#       Environment = "shared"
+#       Team        = "data_science"
+#     }
+#     grants = [
+#       { principal = "Data Scientists", permission = "ATTACH_TO" }
+#     ]
+#   }
+#
+#   sql_warehouse = {
+#     spark_version      = "11.3.x-scala2.12"
+#     node_type_id       = "Standard_D4s_v5"
+#     num_workers        = 1
+#     autotermination_minutes = 20
+#     custom_tags = {
+#       Environment = "shared"
+#       Purpose     = "SQL_Analytics"
+#     }
+#     grants = [
+#       { principal = "Data Analysts", permission = "ATTACH_TO" }
+#     ]
+#   }
+# }

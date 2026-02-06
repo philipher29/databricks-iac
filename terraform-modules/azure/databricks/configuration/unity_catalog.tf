@@ -68,8 +68,8 @@ resource "databricks_grants" "storage_credentials" {
 resource "databricks_external_location" "this" {
   for_each = var.external_locations
 
-  name            = each.key
-  url             = each.value.url
+  name = each.key
+  url  = each.value.url
   credential_name = each.value.credential_name != null ? each.value.credential_name : (
     length(var.storage_credentials) > 0 ? keys(var.storage_credentials)[0] : null
   )

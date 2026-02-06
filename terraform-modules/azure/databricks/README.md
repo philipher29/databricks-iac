@@ -202,8 +202,73 @@ deployments/databricks-workspace/environments/
 | Permission | Scope | Purpose |
 |------------|-------|---------|
 | Contributor | Resource Group | Create workspace |
+| Contributor | Databricks Workspace | Required for Databricks provider auth |
 | Storage Blob Data Contributor | State Storage | Terraform state |
 | Storage Blob Data Contributor | Unity Catalog Storage | Data access |
+
+### Databricks Workspace Access (Required for MSI)
+
+For the managed identity to authenticate to the Databricks workspace API, you must add it as a user in Databricks:
+
+1. Navigate to your Databricks workspace in Azure Portal
+2. Click **Launch Workspace** to open Databricks UI
+3. Go to **Settings** → **Admin Settings** → **Users**
+4. Click **Add User** and enter the managed identity's **Object ID** (not Client ID)
+5. Grant **Admin** permissions for full access, or configure specific permissions
+
+Alternatively, use Azure CLI to add the managed identity:
+
+```bash
+# Get the managed identity object ID
+MI_OBJECT_ID=$(az identity show --name <managed-identity-name> --resource-group <rg> --query principalId -o tsv)
+
+# Add to Databricks workspace (requires workspace URL)
+curl -X POST "https://<workspace-url>/api/2.0/preview/scim/v2/Users" \
+  -H "Authorization: Bearer $(az account get-access-token --resource 2ff814a6-3304-4ab8-85cb-cd0e6f879c1d --query accessToken -o tsv)" \
+  -H "Content-Type: application/json" \
+  -d "{\"schemas\":[\"urn:ietf:params:scim:schemas:core:2.0:User\"],\"userName\":\"${MI_OBJECT_ID}\",\"displayName\":\"My Managed Identity\",\"active\":true,\"entitlements\":[{\"value\":\"allow-cluster-create\"}]}"
+```
+
+## Authentication Troubleshooting
+
+### 401 Unauthorized Errors
+
+If you receive `401 Unauthorized` when the Databricks provider tries to authenticate:
+
+1. **Verify managed identity has Contributor role on the workspace:**
+   ```bash
+   az role assignment list --assignee <managed-identity-client-id> --scope /subscriptions/<sub>/resourceGroups/<rg>/providers/Microsoft.Databricks/workspaces/<workspace>
+   ```
+
+2. **Verify managed identity is added as a Databricks user:**
+   - Open Databricks workspace → Admin Settings → Users
+   - Check if the managed identity's Object ID is listed
+
+3. **For local development, use Azure CLI auth instead:**
+   ```bash
+   az login
+   terraform plan -var="use_msi=false"
+   ```
+
+4. **Check token acquisition:**
+   ```bash
+   # Test if MSI can get a Databricks token
+   az account get-access-token --resource 2ff814a6-3304-4ab8-85cb-cd0e6f879c1d
+   ```
+
+### 403 Forbidden Errors
+
+1. **Check workspace network settings** - ensure your IP is allowed if IP access lists are enabled
+2. **Verify private endpoint configuration** if using private connectivity
+3. **Check NSG rules** on the Databricks subnets
+
+### Authentication Methods
+
+| Method | Use Case | Configuration |
+|--------|----------|---------------|
+| Managed Identity (MSI) | Azure DevOps pipelines, Azure VMs | `use_msi = true` |
+| Azure CLI | Local development | `use_msi = false` + `az login` |
+| Service Principal | CI/CD without MSI | `use_msi = false` + `client_secret` |
 
 ## Usage
 

@@ -148,12 +148,15 @@ volumes = {}
 # SECRET SCOPES (Key Vault backed in QAS)
 # ---------------------------------------------------------------------------------------------------------------------
 
+# NOTE: Key Vault resource IDs are constructed dynamically using subscription_id variable
+# The format is: /subscriptions/${subscription_id}/resourceGroups/<rg>/providers/Microsoft.KeyVault/vaults/<name>
+# Update the keyvault_name variable instead of hardcoding subscription IDs
+
 secret_scopes = {
   qas_secrets = {
-    keyvault_metadata = {
-      resource_id = "/subscriptions/xxx/resourceGroups/rg-databricks-qas/providers/Microsoft.KeyVault/vaults/kv-databricks-qas"
-      dns_name    = "https://kv-databricks-qas.vault.azure.net/"
-    }
+    # Key Vault-backed secret scope - subscription ID injected via keyvault_resource_id variable
+    keyvault_name = "kv-databricks-qas"
+    keyvault_rg   = "rg-databricks-qas" # Optional, defaults to resource_group_name
     acls = [
       { principal = "Data Engineers", permission = "READ" },
       { principal = "Platform Admins", permission = "MANAGE" }

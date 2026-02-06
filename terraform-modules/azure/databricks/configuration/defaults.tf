@@ -39,6 +39,12 @@ variable "defaults" {
     # External location defaults
     external_location_skip_validation = optional(bool, false)
     external_location_read_only       = optional(bool, false)
+
+    # Cluster defaults
+    cluster_autotermination_minutes = optional(number, 60)
+    cluster_enable_elastic_disk     = optional(bool, true)
+    cluster_mode                    = optional(string, "STANDARD")
+    cluster_num_workers             = optional(number, 2)
   })
   default = {}
 }
@@ -98,6 +104,14 @@ locals {
       "CAN_USE"
     ]
 
+    cluster = [
+      "ALL_PERMISSIONS",
+      "ATTACH_TO",
+      "MANAGE",
+      "RESTART",
+      "CAN_USE"
+    ]
+
     secret_scope = [
       "READ",
       "WRITE",
@@ -122,6 +136,10 @@ locals {
     ip_access_list_enabled                = true
     external_location_skip_validation     = false
     external_location_read_only           = false
+    cluster_autotermination_minutes       = 60
+    cluster_enable_elastic_disk           = true
+    cluster_mode                          = "STANDARD"
+    cluster_num_workers                   = 2
   }, var.defaults)
 }
 
@@ -145,6 +163,7 @@ variable "naming" {
       volume             = optional(string, "{env}_{name}")
       secret_scope       = optional(string, "{env}_secrets")
       cluster_policy     = optional(string, "{name}")
+      cluster            = optional(string, "{env}_{name}")
       group              = optional(string, "{name}")
     }), {})
   })
@@ -166,6 +185,7 @@ locals {
       volume             = coalesce(try(var.naming.patterns.volume, null), "{env}_{name}")
       secret_scope       = coalesce(try(var.naming.patterns.secret_scope, null), "{env}_secrets")
       cluster_policy     = coalesce(try(var.naming.patterns.cluster_policy, null), "{name}")
+      cluster            = coalesce(try(var.naming.patterns.cluster, null), "{env}_{name}")
       group              = coalesce(try(var.naming.patterns.group, null), "{name}")
     }
   }

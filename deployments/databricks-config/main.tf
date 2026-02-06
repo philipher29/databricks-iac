@@ -86,6 +86,10 @@ module "databricks_config" {
     environment = var.environment
   }
 
+  # Azure context for dynamic resource ID construction
+  subscription_id             = var.subscription_id
+  default_resource_group_name = var.resource_group_name
+
   # EntraID group mapping
   entra_id_groups = var.entra_id_groups
 

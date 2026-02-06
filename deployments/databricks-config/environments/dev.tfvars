@@ -2,9 +2,9 @@
 # DEV ENVIRONMENT - DATABRICKS CONFIGURATION
 # ---------------------------------------------------------------------------------------------------------------------
 
-environment         = "dev"
-resource_group_name = "rg-databricks-dev"
-workspace_name      = "dbw-platform-dev"
+environment           = "dev"
+resource_group_name   = "rg-databricks-dev"
+workspace_name        = "dbw-platform-dev"
 access_connector_name = "dbw-platform-dev-access-connector"
 
 # Unity Catalog (optional in dev)

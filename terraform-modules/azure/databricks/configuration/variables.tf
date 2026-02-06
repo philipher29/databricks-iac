@@ -173,12 +173,18 @@ variable "cluster_policies" {
 
 # ---------------------------------------------------------------------------------------------------------------------
 # SECRET SCOPES
+# Supports both Databricks-backed and Azure Key Vault-backed scopes
+# For Key Vault-backed scopes, use keyvault_name/keyvault_rg (recommended) OR legacy keyvault_metadata
 # ---------------------------------------------------------------------------------------------------------------------
 
 variable "secret_scopes" {
-  description = "Map of secret scopes to create"
+  description = "Map of secret scopes to create. For Key Vault-backed scopes, use keyvault_name (resource ID constructed dynamically)."
   type = map(object({
     initial_manage_principal = optional(string, "users")
+    # New recommended pattern: use keyvault_name and let the module construct resource_id
+    keyvault_name = optional(string)
+    keyvault_rg   = optional(string) # Defaults to workspace resource group if not specified
+    # Legacy pattern: provide full keyvault_metadata (deprecated, use keyvault_name instead)
     keyvault_metadata = optional(object({
       resource_id = string
       dns_name    = string
@@ -189,6 +195,26 @@ variable "secret_scopes" {
     })), [])
   }))
   default = {}
+
+  validation {
+    condition = alltrue([
+      for k, v in var.secret_scopes : !(v.keyvault_name != null && v.keyvault_metadata != null)
+    ])
+    error_message = "Cannot specify both keyvault_name and keyvault_metadata. Use keyvault_name (recommended) or keyvault_metadata (legacy), not both."
+  }
+}
+
+variable "subscription_id" {
+  description = "Azure subscription ID (required for dynamic Key Vault resource ID construction)"
+  type        = string
+  default     = null
+  sensitive   = true
+}
+
+variable "default_resource_group_name" {
+  description = "Default resource group name for Key Vault lookups when keyvault_rg is not specified"
+  type        = string
+  default     = null
 }
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -210,6 +236,72 @@ variable "ip_access_lists" {
     ])
     error_message = "List type must be either ALLOW or BLOCK."
   }
+}
+
+# ---------------------------------------------------------------------------------------------------------------------
+# CLUSTERS
+# ---------------------------------------------------------------------------------------------------------------------
+
+variable "clusters" {
+  description = "Map of Databricks clusters to create"
+  type = map(object({
+    spark_version           = string
+    node_type_id            = string
+    driver_node_type_id     = optional(string) # Defaults to node_type_id if not specified
+    num_workers             = optional(number, 2)
+    min_workers             = optional(number)             # For autoscaling
+    max_workers             = optional(number)             # For autoscaling
+    cluster_mode            = optional(string, "STANDARD") # SINGLE_NODE or STANDARD
+    autotermination_minutes = optional(number, 60)
+    enable_elastic_disk     = optional(bool, true)
+    instance_pool_id        = optional(string)
+    policy_id               = optional(string) # Reference to cluster policy key or ID
+    cluster_log_conf = optional(object({
+      dbfs = optional(object({
+        destination = string
+      }))
+    }))
+    aws_attributes = optional(object({
+      availability     = optional(string, "SPOT")
+      zone_id          = optional(string)
+      ebs_volume_count = optional(number)
+      ebs_volume_size  = optional(number)
+    }))
+    azure_attributes = optional(object({
+      availability       = optional(string, "SPOT_WITH_FALLBACK")
+      first_on_demand    = optional(number, 1)
+      spot_bid_max_price = optional(number, -1)
+    }))
+    gcp_attributes = optional(object({
+      availability    = optional(string, "PREEMPTIBLE")
+      local_ssd_count = optional(number)
+    }))
+    ssh_public_keys = optional(list(string))
+    custom_tags     = optional(map(string), {})
+    spark_conf      = optional(map(string), {})
+    env_vars        = optional(map(string), {})
+    init_scripts = optional(list(object({
+      dbfs = optional(object({
+        destination = string
+      }))
+      s3 = optional(object({
+        destination = string
+        region      = optional(string)
+        endpoint    = optional(string)
+      }))
+    })))
+    workload_type = optional(object({
+      clients = optional(object({
+        notebooks = optional(bool)
+        jobs      = optional(bool)
+      }))
+    }))
+    grants = optional(list(object({
+      principal  = string
+      permission = string # ATTACH_TO, MANAGE, RESTART, CAN_USE
+    })), [])
+  }))
+  default = {}
 }
 
 # ---------------------------------------------------------------------------------------------------------------------
