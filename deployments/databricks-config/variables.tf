@@ -1,6 +1,10 @@
 # ---------------------------------------------------------------------------------------------------------------------
 # AUTHENTICATION VARIABLES
-# Supports MSI (recommended for pipelines), Azure CLI (local dev), or Service Principal
+# Supports multiple authentication methods:
+#   - User-Assigned Managed Identity (recommended for pipelines) - use_msi=true + managed_identity_client_id
+#   - System-Assigned Managed Identity - use_msi=true (without managed_identity_client_id)
+#   - Azure CLI (for local development) - use_msi=false
+#   - Service Principal - use_msi=false + client_id + client_secret
 # ---------------------------------------------------------------------------------------------------------------------
 
 variable "subscription_id" {
@@ -15,7 +19,7 @@ variable "subscription_id" {
 }
 
 variable "tenant_id" {
-  description = "Azure tenant ID (required for Service Principal auth, optional for MSI)"
+  description = "Azure tenant ID (recommended for all auth methods, required for Service Principal)"
   type        = string
   default     = null
   sensitive   = true
@@ -33,7 +37,7 @@ variable "use_msi" {
 }
 
 variable "managed_identity_client_id" {
-  description = "Client ID of the managed identity (required when use_msi=true)"
+  description = "Client ID of the User-Assigned Managed Identity. Required when use_msi=true for User-Assigned Identity. Leave null for System-Assigned Identity."
   type        = string
   default     = null
   sensitive   = true
@@ -41,6 +45,18 @@ variable "managed_identity_client_id" {
   validation {
     condition     = var.managed_identity_client_id == null || can(regex("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", var.managed_identity_client_id))
     error_message = "Managed identity client ID must be a valid UUID format when provided."
+  }
+}
+
+variable "client_id" {
+  description = "Client ID for Service Principal authentication (required when use_msi=false and not using Azure CLI)"
+  type        = string
+  default     = null
+  sensitive   = true
+
+  validation {
+    condition     = var.client_id == null || can(regex("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", var.client_id))
+    error_message = "Client ID must be a valid UUID format when provided."
   }
 }
 
@@ -130,6 +146,17 @@ variable "defaults" {
 
 variable "entra_id_groups" {
   description = "Map of EntraID group display names to their Azure AD object IDs"
+  type        = map(string)
+  default     = {}
+}
+
+# ---------------------------------------------------------------------------------------------------------------------
+# DATABRICKS ACCOUNT GROUPS
+# Maps Databricks Account Group display names to their member IDs
+# ---------------------------------------------------------------------------------------------------------------------
+
+variable "account_groups" {
+  description = "Map of Databricks Account Group display names to their member IDs for workspace group membership"
   type        = map(string)
   default     = {}
 }

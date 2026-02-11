@@ -17,6 +17,27 @@ entra_id_groups = {
 }
 
 # ---------------------------------------------------------------------------------------------------------------------
+# DATABRICKS ACCOUNT GROUPS MAPPING
+# Maps Databricks Account Group display names to their member IDs
+# Use databricks_group data source with account-level provider to fetch these IDs:
+#
+#   data "databricks_group" "account_admins" {
+#     provider     = databricks.account
+#     display_name = "Account Admins"
+#   }
+#   # Then use: data.databricks_group.account_admins.id
+#
+# Or fetch via Databricks CLI:
+#   databricks account groups list --output json | jq '.[] | {name: .displayName, id: .id}'
+# ---------------------------------------------------------------------------------------------------------------------
+
+account_groups = {
+  # Example mappings - replace with actual Databricks Account Group member IDs:
+  # "Account Admins"     = "1234567890123456"
+  # "Data Platform Team" = "9876543210987654"
+}
+
+# ---------------------------------------------------------------------------------------------------------------------
 # GROUPS (common structure, may have different permissions per env)
 # Use entra_id_groups field to map Azure AD groups without azuread provider
 # ---------------------------------------------------------------------------------------------------------------------
@@ -27,6 +48,10 @@ groups = {
     allow_cluster_create  = true
     databricks_sql_access = true
     workspace_access      = true
+    # Add account groups by name (requires account_groups mapping above)
+    # account_groups = ["Data Platform Team"]
+    # Or add account groups directly by member ID:
+    # account_group_ids = ["1234567890123456"]
   }
 
   data_scientists = {
@@ -50,6 +75,8 @@ groups = {
     databricks_sql_access      = true
     workspace_access           = true
     child_groups               = ["data_engineers"]
+    # Example: add account-level admin group as member
+    # account_groups = ["Account Admins"]
   }
 }
 

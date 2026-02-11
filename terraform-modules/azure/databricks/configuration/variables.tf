@@ -46,12 +46,32 @@ variable "groups" {
     allow_instance_pool_create = optional(bool, false)
     databricks_sql_access      = optional(bool, false)
     workspace_access           = optional(bool, true)
-    members                    = optional(list(string), [])
-    service_principals         = optional(list(string), [])
-    child_groups               = optional(list(string), [])
+    members                    = optional(list(string), []) # User IDs or emails
+    service_principals         = optional(list(string), []) # Service principal application IDs
+    child_groups               = optional(list(string), []) # Keys of groups defined in this variable
     entra_id_groups            = optional(list(string), []) # Keys from entra_id_groups variable
+    account_group_ids          = optional(list(string), []) # Databricks Account Group member IDs (direct)
+    account_groups             = optional(list(string), []) # Keys from account_groups variable (name lookup)
   }))
   default = {}
+}
+
+# ---------------------------------------------------------------------------------------------------------------------
+# DATABRICKS ACCOUNT GROUPS MAPPING
+# Maps account group display names to their Databricks member IDs
+# Use this to add account-level groups as members of workspace groups
+# ---------------------------------------------------------------------------------------------------------------------
+
+variable "account_groups" {
+  description = "Map of Databricks Account Group display names to their member IDs. Use data source 'databricks_group' with account-level provider to fetch these IDs."
+  type        = map(string)
+  default     = {}
+
+  # Example:
+  # account_groups = {
+  #   "Account Admins"     = "1234567890123456"
+  #   "Data Platform Team" = "9876543210987654"
+  # }
 }
 
 # ---------------------------------------------------------------------------------------------------------------------

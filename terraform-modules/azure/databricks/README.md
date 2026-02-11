@@ -266,9 +266,67 @@ If you receive `401 Unauthorized` when the Databricks provider tries to authenti
 
 | Method | Use Case | Configuration |
 |--------|----------|---------------|
-| Managed Identity (MSI) | Azure DevOps pipelines, Azure VMs | `use_msi = true` |
+| User-Assigned MSI | Azure DevOps pipelines (recommended) | `use_msi = true` + `managed_identity_client_id` |
+| System-Assigned MSI | Azure VMs with system identity | `use_msi = true` (no client_id) |
 | Azure CLI | Local development | `use_msi = false` + `az login` |
-| Service Principal | CI/CD without MSI | `use_msi = false` + `client_secret` |
+| Service Principal | CI/CD without MSI | `use_msi = false` + `client_id` + `client_secret` |
+
+### User-Assigned Managed Identity Setup
+
+1. **Create the User-Assigned Managed Identity:**
+   ```bash
+   az identity create \
+     --name mi-databricks-deploy \
+     --resource-group rg-shared \
+     --location westeurope
+   ```
+
+2. **Get the identity's Client ID and Principal ID:**
+   ```bash
+   # Client ID (used for authentication)
+   az identity show --name mi-databricks-deploy --resource-group rg-shared --query clientId -o tsv
+   
+   # Principal ID / Object ID (used for RBAC and Databricks user)
+   az identity show --name mi-databricks-deploy --resource-group rg-shared --query principalId -o tsv
+   ```
+
+3. **Assign RBAC roles to the managed identity:**
+   ```bash
+   PRINCIPAL_ID=$(az identity show --name mi-databricks-deploy --resource-group rg-shared --query principalId -o tsv)
+   
+   # Contributor on the Databricks workspace
+   az role assignment create \
+     --assignee $PRINCIPAL_ID \
+     --role "Contributor" \
+     --scope /subscriptions/<sub>/resourceGroups/<rg>/providers/Microsoft.Databricks/workspaces/<workspace>
+   
+   # Storage Blob Data Contributor for Terraform state
+   az role assignment create \
+     --assignee $PRINCIPAL_ID \
+     --role "Storage Blob Data Contributor" \
+     --scope /subscriptions/<sub>/resourceGroups/<rg>/providers/Microsoft.Storage/storageAccounts/<storage>
+   ```
+
+4. **Add the identity to Databricks workspace as admin:**
+   - Open Databricks workspace → Admin Settings → Users
+   - Add the **Principal ID** (Object ID) as a user with Admin permissions
+
+5. **Configure Terraform to use the identity:**
+   ```hcl
+   # terraform.tfvars or via -var flags
+   use_msi                    = true
+   managed_identity_client_id = "<client-id-from-step-2>"
+   tenant_id                  = "<your-tenant-id>"
+   subscription_id            = "<your-subscription-id>"
+   ```
+
+6. **Set environment variables (for Azure DevOps or local):**
+   ```bash
+   export ARM_USE_MSI=true
+   export ARM_CLIENT_ID=<client-id>
+   export ARM_TENANT_ID=<tenant-id>
+   export ARM_SUBSCRIPTION_ID=<subscription-id>
+   ```
 
 ## Usage
 

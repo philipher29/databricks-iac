@@ -1,6 +1,10 @@
 # ---------------------------------------------------------------------------------------------------------------------
 # PROVIDER CONFIGURATION
-# Supports multiple authentication methods: MSI, Azure CLI, Service Principal
+# Supports multiple authentication methods:
+#   - User-Assigned Managed Identity (recommended for pipelines)
+#   - System-Assigned Managed Identity
+#   - Azure CLI (for local development)
+#   - Service Principal (alternative)
 # ---------------------------------------------------------------------------------------------------------------------
 
 terraform {
@@ -16,7 +20,7 @@ terraform {
 
 # ---------------------------------------------------------------------------------------------------------------------
 # AZURE PROVIDER
-# Supports MSI (pipeline/VM), Azure CLI (local), or Service Principal
+# Supports User-Assigned MSI, System-Assigned MSI, Azure CLI, or Service Principal
 # ---------------------------------------------------------------------------------------------------------------------
 
 provider "azurerm" {
@@ -32,12 +36,15 @@ provider "azurerm" {
 
   subscription_id = var.subscription_id
 
-  # MSI authentication (for Azure DevOps pipelines and Azure VMs)
+  # User-Assigned Managed Identity authentication (recommended)
+  # Requires: use_msi = true AND managed_identity_client_id set
   use_msi   = var.use_msi
-  client_id = var.use_msi ? var.managed_identity_client_id : null
+  client_id = var.use_msi ? var.managed_identity_client_id : var.client_id
 
-  # Service Principal authentication (alternative)
-  tenant_id     = var.use_msi ? null : var.tenant_id
+  # Tenant ID (recommended for all auth methods)
+  tenant_id = var.tenant_id
+
+  # Service Principal authentication (when use_msi = false)
   client_secret = var.use_msi ? null : var.client_secret
 
   # Skip provider registration for faster init (assume already registered)

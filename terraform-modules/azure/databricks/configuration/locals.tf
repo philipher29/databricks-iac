@@ -24,7 +24,7 @@ locals {
         type      = "service_principal"
       }
     ]],
-    # Child groups
+    # Child groups (workspace groups defined in this module)
     [for group_key, group in var.groups : [
       for child in coalesce(group.child_groups, []) : {
         key       = "${group_key}-child-${child}"
@@ -33,7 +33,7 @@ locals {
         type      = "child_group"
       }
     ]],
-    # EntraID groups
+    # EntraID groups (Azure AD groups by object ID)
     [for group_key, group in var.groups : [
       for entra_name in coalesce(group.entra_id_groups, []) : {
         key       = "${group_key}-entra-${entra_name}"
@@ -41,6 +41,25 @@ locals {
         member_id = var.entra_id_groups[entra_name]
         type      = "entra_id"
       }
+    ]],
+    # Account groups by member ID (directly specified in groups variable)
+    [for group_key, group in var.groups : [
+      for account_group_id in coalesce(group.account_group_ids, []) : {
+        key       = "${group_key}-account-${account_group_id}"
+        group_key = group_key
+        member_id = account_group_id
+        type      = "account_group"
+      }
+    ]],
+    # Account groups by name lookup (from account_groups variable mapping)
+    [for group_key, group in var.groups : [
+      for account_group_name in coalesce(group.account_groups, []) : {
+        key       = "${group_key}-account-${account_group_name}"
+        group_key = group_key
+        member_id = var.account_groups[account_group_name]
+        type      = "account_group"
+      }
+      if try(group.account_groups, null) != null
     ]]
   ])
 

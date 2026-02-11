@@ -14,8 +14,12 @@ resource "databricks_group" "this" {
 }
 
 # ---------------------------------------------------------------------------------------------------------------------
-# GROUP MEMBERSHIP - Direct Members (Users, Service Principals, EntraID Groups)
-# Unified resource for all non-child-group memberships
+# GROUP MEMBERSHIP - Direct Members
+# Unified resource for all non-child-group memberships:
+#   - Users (by user ID or email)
+#   - Service Principals (by application ID)
+#   - EntraID Groups (by Azure AD object ID)
+#   - Databricks Account Groups (by member ID)
 # ---------------------------------------------------------------------------------------------------------------------
 
 resource "databricks_group_member" "direct" {
@@ -26,8 +30,8 @@ resource "databricks_group_member" "direct" {
 }
 
 # ---------------------------------------------------------------------------------------------------------------------
-# GROUP MEMBERSHIP - Child Groups
-# Separate resource because member_id references created groups
+# GROUP MEMBERSHIP - Child Groups (Workspace Groups)
+# Separate resource because member_id references groups created in this module
 # ---------------------------------------------------------------------------------------------------------------------
 
 resource "databricks_group_member" "child_groups" {

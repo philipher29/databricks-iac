@@ -93,6 +93,9 @@ module "databricks_config" {
   # EntraID group mapping
   entra_id_groups = var.entra_id_groups
 
+  # Databricks Account Groups mapping (for workspace group membership)
+  account_groups = var.account_groups
+
   # Groups
   groups = var.groups
 
