@@ -43,18 +43,23 @@ resource "databricks_storage_credential" "this" {
 resource "databricks_grants" "storage_credentials" {
   for_each = local.storage_credential_grants
 
-  storage_credential = databricks_storage_credential.this[each.value.resource_key].id
+  storage_credential = databricks_storage_credential.this[each.key].id
 
-  grant {
-    principal  = each.value.principal
-    privileges = each.value.privileges
+  dynamic "grant" {
+    for_each = each.value
+    content {
+      principal  = grant.value.principal
+      privileges = grant.value.privileges
+    }
   }
 
   lifecycle {
     precondition {
-      condition = alltrue([
-        for priv in each.value.privileges : contains(local.valid_privileges.storage_credential, priv)
-      ])
+      condition = alltrue(flatten([
+        for grant_item in each.value : [
+          for priv in grant_item.privileges : contains(local.valid_privileges.storage_credential, priv)
+        ]
+      ]))
       error_message = "Invalid privilege for storage credential. Valid values: ${join(", ", local.valid_privileges.storage_credential)}"
     }
   }
@@ -99,18 +104,23 @@ resource "databricks_external_location" "this" {
 resource "databricks_grants" "external_locations" {
   for_each = local.external_location_grants
 
-  external_location = databricks_external_location.this[each.value.resource_key].id
+  external_location = databricks_external_location.this[each.key].id
 
-  grant {
-    principal  = each.value.principal
-    privileges = each.value.privileges
+  dynamic "grant" {
+    for_each = each.value
+    content {
+      principal  = grant.value.principal
+      privileges = grant.value.privileges
+    }
   }
 
   lifecycle {
     precondition {
-      condition = alltrue([
-        for priv in each.value.privileges : contains(local.valid_privileges.external_location, priv)
-      ])
+      condition = alltrue(flatten([
+        for grant_item in each.value : [
+          for priv in grant_item.privileges : contains(local.valid_privileges.external_location, priv)
+        ]
+      ]))
       error_message = "Invalid privilege for external location. Valid values: ${join(", ", local.valid_privileges.external_location)}"
     }
   }

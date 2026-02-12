@@ -4,13 +4,20 @@
 # ---------------------------------------------------------------------------------------------------------------------
 
 resource "databricks_group" "this" {
-  for_each = var.groups
+  for_each = local.effective_groups
 
   display_name               = each.value.display_name
   allow_cluster_create       = coalesce(each.value.allow_cluster_create, local.defaults.group_allow_cluster_create)
   allow_instance_pool_create = coalesce(each.value.allow_instance_pool_create, local.defaults.group_allow_instance_pool_create)
   databricks_sql_access      = coalesce(each.value.databricks_sql_access, local.defaults.group_databricks_sql_access)
   workspace_access           = coalesce(each.value.workspace_access, local.defaults.group_workspace_access)
+
+  lifecycle {
+    precondition {
+      condition     = !local.permission_model.enabled || local.permission_stage != null
+      error_message = "permission_model.enabled requires stage (permission_model.stage or naming.environment)."
+    }
+  }
 }
 
 # ---------------------------------------------------------------------------------------------------------------------

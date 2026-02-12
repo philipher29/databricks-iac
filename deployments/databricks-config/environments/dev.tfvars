@@ -19,7 +19,7 @@ storage_credentials = {
     comment = "Development storage credential"
     grants = [
       {
-        principal  = "Data Engineers"
+        principal  = "DB-Engineers-dev"
         privileges = ["READ_FILES", "WRITE_FILES", "CREATE_EXTERNAL_TABLE"]
       }
     ]
@@ -37,7 +37,7 @@ external_locations = {
     comment         = "Development landing zone"
     grants = [
       {
-        principal  = "Data Engineers"
+        principal  = "DB-Engineers-dev"
         privileges = ["READ_FILES", "WRITE_FILES", "CREATE_EXTERNAL_TABLE"]
       }
     ]
@@ -53,11 +53,11 @@ catalogs = {
     comment = "Development analytics catalog"
     grants = [
       {
-        principal  = "Data Engineers"
+        principal  = "DB-Engineers-dev"
         privileges = ["ALL_PRIVILEGES"]
       },
       {
-        principal  = "Data Analysts"
+        principal  = "DB-Engineers-dev"
         privileges = ["USE_CATALOG", "USE_SCHEMA", "SELECT"]
       }
     ]
@@ -73,6 +73,27 @@ catalogs = {
 }
 
 # ---------------------------------------------------------------------------------------------------------------------
+# CLUSTERS (optional Azure Databricks workspace compute)
+# ---------------------------------------------------------------------------------------------------------------------
+
+clusters = {
+  # dev_shared = {
+  #   spark_version           = "13.3.x-scala2.12"
+  #   node_type_id            = "Standard_DS4_v2"
+  #   autotermination_minutes = 30
+  #   num_workers             = 2
+  #   policy_id               = "data_engineering"
+  #   azure_attributes = {
+  #     availability = "ON_DEMAND_AZURE"
+  #   }
+  #   grants = [
+  #     { principal = "DB-Engineers-dev", permission = "CAN_ATTACH_TO" },
+  #     { principal = "DB-Admin-dev", permission = "CAN_MANAGE" }
+  #   ]
+  # }
+}
+
+# ---------------------------------------------------------------------------------------------------------------------
 # SECRET SCOPES
 # ---------------------------------------------------------------------------------------------------------------------
 
@@ -80,7 +101,7 @@ secret_scopes = {
   dev_secrets = {
     initial_manage_principal = "users"
     acls = [
-      { principal = "Data Engineers", permission = "WRITE" }
+      { principal = "DB-Engineers-dev", permission = "WRITE" }
     ]
   }
 }
@@ -104,7 +125,7 @@ ip_access_lists = {}
 # enable_crossplane_service_principal = true
 # crossplane_sp_secret_name           = "crossplane-sp-client-id"
 # crossplane_sp_display_name          = "Crossplane"
-# crossplane_sp_groups                = ["platform_admins"]
+# crossplane_sp_groups                = ["db_admins"]
 
 # ---------------------------------------------------------------------------------------------------------------------
 # ADDITIONAL SERVICE PRINCIPALS
@@ -117,6 +138,6 @@ ip_access_lists = {}
 #     display_name               = "CI/CD Pipeline"
 #     allow_cluster_create       = true
 #     databricks_sql_access      = true
-#     groups                     = ["platform_admins"]
+#     groups                     = ["db_admins"]
 #   }
 # }

@@ -38,6 +38,17 @@ variable "entra_id_groups" {
 # GROUPS AND PERMISSIONS
 # ---------------------------------------------------------------------------------------------------------------------
 
+variable "permission_model" {
+  description = "Built-in permission concept for workspace groups."
+  type = object({
+    enabled               = optional(bool, true)
+    stage                 = optional(string)
+    admin_group_prefix    = optional(string, "DB-Admin")
+    engineer_group_prefix = optional(string, "DB-Engineers")
+  })
+  default = {}
+}
+
 variable "groups" {
   description = "Map of Databricks groups to create with their configurations"
   type = map(object({
@@ -192,6 +203,45 @@ variable "cluster_policies" {
 }
 
 # ---------------------------------------------------------------------------------------------------------------------
+# CLUSTERS
+# ---------------------------------------------------------------------------------------------------------------------
+
+variable "clusters" {
+  description = "Map of Azure Databricks clusters to create"
+  type = map(object({
+    cluster_name            = optional(string)
+    spark_version           = string
+    node_type_id            = string
+    driver_node_type_id     = optional(string)
+    autotermination_minutes = optional(number)
+    num_workers             = optional(number)
+    autoscale = optional(object({
+      min_workers = number
+      max_workers = number
+    }))
+    data_security_mode          = optional(string)
+    single_user_name            = optional(string)
+    policy_id                   = optional(string)
+    apply_policy_default_values = optional(bool)
+    instance_pool_id            = optional(string)
+    spark_conf                  = optional(map(string), {})
+    spark_env_vars              = optional(map(string), {})
+    custom_tags                 = optional(map(string), {})
+    azure_attributes = optional(object({
+      availability       = optional(string)
+      first_on_demand    = optional(number)
+      spot_bid_max_price = optional(number)
+      zone_id            = optional(string)
+    }))
+    grants = optional(list(object({
+      principal  = string
+      permission = string # CAN_ATTACH_TO, CAN_MANAGE, CAN_RESTART, CAN_VIEW
+    })), [])
+  }))
+  default = {}
+}
+
+# ---------------------------------------------------------------------------------------------------------------------
 # SECRET SCOPES
 # Supports both Databricks-backed and Azure Key Vault-backed scopes
 # For Key Vault-backed scopes, use keyvault_name/keyvault_rg (recommended) OR legacy keyvault_metadata
@@ -256,72 +306,6 @@ variable "ip_access_lists" {
     ])
     error_message = "List type must be either ALLOW or BLOCK."
   }
-}
-
-# ---------------------------------------------------------------------------------------------------------------------
-# CLUSTERS
-# ---------------------------------------------------------------------------------------------------------------------
-
-variable "clusters" {
-  description = "Map of Databricks clusters to create"
-  type = map(object({
-    spark_version           = string
-    node_type_id            = string
-    driver_node_type_id     = optional(string) # Defaults to node_type_id if not specified
-    num_workers             = optional(number, 2)
-    min_workers             = optional(number)             # For autoscaling
-    max_workers             = optional(number)             # For autoscaling
-    cluster_mode            = optional(string, "STANDARD") # SINGLE_NODE or STANDARD
-    autotermination_minutes = optional(number, 60)
-    enable_elastic_disk     = optional(bool, true)
-    instance_pool_id        = optional(string)
-    policy_id               = optional(string) # Reference to cluster policy key or ID
-    cluster_log_conf = optional(object({
-      dbfs = optional(object({
-        destination = string
-      }))
-    }))
-    aws_attributes = optional(object({
-      availability     = optional(string, "SPOT")
-      zone_id          = optional(string)
-      ebs_volume_count = optional(number)
-      ebs_volume_size  = optional(number)
-    }))
-    azure_attributes = optional(object({
-      availability       = optional(string, "SPOT_WITH_FALLBACK")
-      first_on_demand    = optional(number, 1)
-      spot_bid_max_price = optional(number, -1)
-    }))
-    gcp_attributes = optional(object({
-      availability    = optional(string, "PREEMPTIBLE")
-      local_ssd_count = optional(number)
-    }))
-    ssh_public_keys = optional(list(string))
-    custom_tags     = optional(map(string), {})
-    spark_conf      = optional(map(string), {})
-    env_vars        = optional(map(string), {})
-    init_scripts = optional(list(object({
-      dbfs = optional(object({
-        destination = string
-      }))
-      s3 = optional(object({
-        destination = string
-        region      = optional(string)
-        endpoint    = optional(string)
-      }))
-    })))
-    workload_type = optional(object({
-      clients = optional(object({
-        notebooks = optional(bool)
-        jobs      = optional(bool)
-      }))
-    }))
-    grants = optional(list(object({
-      principal  = string
-      permission = string # ATTACH_TO, MANAGE, RESTART, CAN_USE
-    })), [])
-  }))
-  default = {}
 }
 
 # ---------------------------------------------------------------------------------------------------------------------

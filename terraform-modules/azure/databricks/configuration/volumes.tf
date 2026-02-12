@@ -19,18 +19,23 @@ resource "databricks_volume" "managed" {
 resource "databricks_grants" "managed_volumes" {
   for_each = local.managed_volume_grants
 
-  volume = "${each.value.catalog_name}.${each.value.schema_name}.${databricks_volume.managed[each.value.resource_key].name}"
+  volume = "${databricks_volume.managed[each.key].catalog_name}.${databricks_volume.managed[each.key].schema_name}.${databricks_volume.managed[each.key].name}"
 
-  grant {
-    principal  = each.value.principal
-    privileges = each.value.privileges
+  dynamic "grant" {
+    for_each = each.value
+    content {
+      principal  = grant.value.principal
+      privileges = grant.value.privileges
+    }
   }
 
   lifecycle {
     precondition {
-      condition = alltrue([
-        for priv in each.value.privileges : contains(local.valid_privileges.volume, priv)
-      ])
+      condition = alltrue(flatten([
+        for grant_item in each.value : [
+          for priv in grant_item.privileges : contains(local.valid_privileges.volume, priv)
+        ]
+      ]))
       error_message = "Invalid privilege for volume. Valid values: ${join(", ", local.valid_privileges.volume)}"
     }
   }
@@ -61,18 +66,23 @@ resource "databricks_volume" "external" {
 resource "databricks_grants" "external_volumes" {
   for_each = local.external_volume_grants
 
-  volume = "${each.value.catalog_name}.${each.value.schema_name}.${databricks_volume.external[each.value.resource_key].name}"
+  volume = "${databricks_volume.external[each.key].catalog_name}.${databricks_volume.external[each.key].schema_name}.${databricks_volume.external[each.key].name}"
 
-  grant {
-    principal  = each.value.principal
-    privileges = each.value.privileges
+  dynamic "grant" {
+    for_each = each.value
+    content {
+      principal  = grant.value.principal
+      privileges = grant.value.privileges
+    }
   }
 
   lifecycle {
     precondition {
-      condition = alltrue([
-        for priv in each.value.privileges : contains(local.valid_privileges.volume, priv)
-      ])
+      condition = alltrue(flatten([
+        for grant_item in each.value : [
+          for priv in grant_item.privileges : contains(local.valid_privileges.volume, priv)
+        ]
+      ]))
       error_message = "Invalid privilege for volume. Valid values: ${join(", ", local.valid_privileges.volume)}"
     }
   }

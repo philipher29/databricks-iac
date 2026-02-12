@@ -105,11 +105,10 @@ locals {
     ]
 
     cluster = [
-      "ALL_PERMISSIONS",
-      "ATTACH_TO",
-      "MANAGE",
-      "RESTART",
-      "CAN_USE"
+      "CAN_ATTACH_TO",
+      "CAN_MANAGE",
+      "CAN_RESTART",
+      "CAN_VIEW"
     ]
 
     secret_scope = [

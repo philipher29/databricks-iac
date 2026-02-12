@@ -81,7 +81,8 @@ module "databricks_config" {
   unity_catalog_metastore_id = var.unity_catalog_metastore_id
 
   # Defaults and naming configuration
-  defaults = var.defaults
+  defaults         = var.defaults
+  permission_model = var.permission_model
   naming = {
     environment = var.environment
   }
@@ -113,6 +114,7 @@ module "databricks_config" {
 
   # Governance
   cluster_policies = var.cluster_policies
+  clusters         = var.clusters
   secret_scopes    = var.secret_scopes
   ip_access_lists  = var.ip_access_lists
 }

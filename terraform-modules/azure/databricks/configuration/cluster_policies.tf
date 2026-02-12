@@ -18,11 +18,7 @@ resource "databricks_cluster_policy" "this" {
 # ---------------------------------------------------------------------------------------------------------------------
 
 resource "databricks_permissions" "cluster_policies" {
-  for_each = {
-    for policy_key in distinct([for p in values(local.cluster_policy_permissions) : p.resource_key]) : policy_key => [
-      for perm in values(local.cluster_policy_permissions) : perm if perm.resource_key == policy_key
-    ]
-  }
+  for_each = local.cluster_policy_permissions
 
   cluster_policy_id = databricks_cluster_policy.this[each.key].id
 

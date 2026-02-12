@@ -4,7 +4,7 @@ Production-ready Terraform modules for deploying Azure Databricks with comprehen
 
 ## Architecture
 
-This solution consists of two separate modules with independent lifecycles:
+This solution consists of three separate modules with independent lifecycles:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -18,21 +18,32 @@ This solution consists of two separate modules with independent lifecycles:
 │                                                                              │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                              │
-│   Module 1: WORKSPACE                 Module 2: CONFIGURATION                │
-│   ├── Azure Databricks Workspace      ├── Groups & Permissions              │
-│   ├── Access Connector                ├── Unity Catalog                      │
-│   └── Private Endpoints               ├── Catalogs & Schemas                 │
-│                                        ├── Volumes                            │
-│   (Azure ARM Resources)               ├── Cluster Policies                   │
-│                                        └── Secret Scopes                      │
+│   Module 1: ACCOUNT                   Module 2: WORKSPACE                    │
+│   ├── Unity Catalog Metastores        ├── Azure Databricks Workspace         │
+│                                       ├── Access Connector                   │
+│                                       └── Private Endpoints                  │
 │                                                                              │
-│                                        (Databricks API Resources)            │
+│   Module 3: CONFIGURATION             (Azure ARM Resources)                  │
+│   ├── Groups & Permissions            ├── Unity Catalog                       │
+│   ├── Catalogs & Schemas              ├── Volumes                             │
+│   ├── Clusters                        ├── Cluster Policies                    │
+│   └── Secret Scopes                   └── IP Access Lists                     │
+│                                                                              │
+│   (Databricks API Resources)                                              │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ## Modules
 
-### 1. Workspace Module (`workspace/`)
+### 1. Account Module (`account/`)
+
+Creates account-level resources:
+
+| Resource | Purpose |
+|----------|---------|
+| `databricks_metastore` | Unity Catalog metastore per region |
+
+### 2. Workspace Module (`workspace/`)
 
 Creates Azure infrastructure resources:
 
@@ -42,7 +53,7 @@ Creates Azure infrastructure resources:
 | `azurerm_databricks_access_connector` | Managed identity for Unity Catalog |
 | `azurerm_private_endpoint` | Private Link connectivity |
 
-### 2. Configuration Module (`configuration/`)
+### 3. Configuration Module (`configuration/`)
 
 Creates Databricks-internal resources:
 
@@ -53,6 +64,7 @@ Creates Databricks-internal resources:
 | External Locations | External storage pointers |
 | Catalogs & Schemas | Data organization |
 | Volumes | File storage |
+| Clusters | Compute resources |
 | Cluster Policies | Compute governance |
 | Secret Scopes | Credential management |
 | IP Access Lists | Network restrictions |
@@ -94,6 +106,9 @@ Each module has a `version.json` file tracking:
 Fast tests validating module structure and Terraform configuration:
 
 ```bash
+cd terraform-modules/azure/databricks/account/tests
+go test -v -run "^Test[^Integration]" ./...
+
 cd terraform-modules/azure/databricks/workspace/tests
 go test -v -run "^Test[^Integration]" ./...
 ```
@@ -112,9 +127,9 @@ go test -v -run "TestIntegration" ./...
 
 | Test Type | Module | Purpose |
 |-----------|--------|---------|
-| Structure | Both | Validate required files exist |
-| Validation | Both | Test variable validators |
-| Plan | Both | Verify plan output |
+| Structure | All | Validate required files exist |
+| Validation | All | Test variable validators |
+| Plan | Workspace/Config | Verify plan output |
 | Integration | Workspace | Deploy/destroy real workspace |
 | Integration | Config | Create real groups/policies |
 
@@ -330,6 +345,26 @@ If you receive `401 Unauthorized` when the Databricks provider tries to authenti
 
 ## Usage
 
+### Deploy Account (Metastores)
+
+```hcl
+module "databricks_account" {
+  source = "./terraform-modules/azure/databricks/account"
+
+  metastores = {
+    westeurope = {
+      storage_root = "abfss://metastore@storage.dfs.core.windows.net/"
+      region       = "westeurope"
+      owner        = "account-admins"
+    }
+    northeurope = {
+      storage_root = "abfss://metastore@storage-ne.dfs.core.windows.net/"
+      region       = "northeurope"
+    }
+  }
+}
+```
+
 ### Deploy Workspace
 
 ```hcl
@@ -360,11 +395,30 @@ module "databricks_config" {
 
   workspace_id        = module.databricks_workspace.workspace_resource_id
   access_connector_id = module.databricks_workspace.access_connector_id
+  unity_catalog_metastore_id = module.databricks_account.metastores["westeurope"].id
 
   groups = {
     data_engineers = {
       display_name         = "Data Engineers"
       allow_cluster_create = true
+    }
+  }
+
+  clusters = {
+    shared_etl = {
+      spark_version = "14.3.x-scala2.12"
+      node_type_id  = "Standard_DS3_v2"
+      autoscale = {
+        min_workers = 1
+        max_workers = 4
+      }
+      data_security_mode = "USER_ISOLATION"
+      grants = [
+        {
+          principal  = "data_engineers"
+          permission = "CAN_ATTACH_TO"
+        }
+      ]
     }
   }
 

@@ -19,7 +19,7 @@ storage_credentials = {
     comment = "Integration test storage credential"
     grants = [
       {
-        principal  = "Data Engineers"
+        principal  = "DB-Engineers-it"
         privileges = ["READ_FILES", "WRITE_FILES", "CREATE_EXTERNAL_TABLE"]
       }
     ]
@@ -37,7 +37,7 @@ external_locations = {
     comment         = "IT landing zone"
     grants = [
       {
-        principal  = "Data Engineers"
+        principal  = "DB-Engineers-it"
         privileges = ["READ_FILES", "WRITE_FILES", "CREATE_EXTERNAL_TABLE"]
       }
     ]
@@ -48,11 +48,11 @@ external_locations = {
     comment         = "IT processed data"
     grants = [
       {
-        principal  = "Data Engineers"
+        principal  = "DB-Engineers-it"
         privileges = ["READ_FILES", "WRITE_FILES"]
       },
       {
-        principal  = "Data Scientists"
+        principal  = "DB-Engineers-it"
         privileges = ["READ_FILES"]
       }
     ]
@@ -68,11 +68,11 @@ catalogs = {
     comment = "Integration test analytics catalog"
     grants = [
       {
-        principal  = "Data Engineers"
+        principal  = "DB-Engineers-it"
         privileges = ["ALL_PRIVILEGES"]
       },
       {
-        principal  = "Data Analysts"
+        principal  = "DB-Engineers-it"
         privileges = ["USE_CATALOG", "USE_SCHEMA", "SELECT"]
       }
     ]
@@ -85,6 +85,12 @@ catalogs = {
 }
 
 # ---------------------------------------------------------------------------------------------------------------------
+# CLUSTERS (optional Azure Databricks workspace compute)
+# ---------------------------------------------------------------------------------------------------------------------
+
+clusters = {}
+
+# ---------------------------------------------------------------------------------------------------------------------
 # SECRET SCOPES
 # ---------------------------------------------------------------------------------------------------------------------
 
@@ -92,8 +98,8 @@ secret_scopes = {
   it_secrets = {
     initial_manage_principal = "users"
     acls = [
-      { principal = "Data Engineers", permission = "WRITE" },
-      { principal = "Data Scientists", permission = "READ" }
+      { principal = "DB-Engineers-it", permission = "WRITE" },
+      { principal = "DB-Engineers-it", permission = "READ" }
     ]
   }
 }

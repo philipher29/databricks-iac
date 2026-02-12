@@ -30,6 +30,7 @@ func TestModuleStructure(t *testing.T) {
 		"catalogs.tf",
 		"volumes.tf",
 		"cluster_policies.tf",
+		"clusters.tf",
 		"secret_scopes.tf",
 		"ip_access_lists.tf",
 		"version.json",
@@ -88,6 +89,7 @@ func TestOutputsExist(t *testing.T) {
 		"schemas",
 		"volumes",
 		"cluster_policies",
+		"clusters",
 		"secret_scopes",
 		"ip_access_lists",
 	}
@@ -110,6 +112,7 @@ func TestVariablesExist(t *testing.T) {
 		"catalogs",
 		"volumes",
 		"cluster_policies",
+		"clusters",
 		"secret_scopes",
 		"ip_access_lists",
 	}
@@ -187,6 +190,18 @@ func TestClusterPoliciesTfHasRequiredResources(t *testing.T) {
 
 	// Should contain cluster policy resource
 	assert.Contains(t, content, "databricks_cluster_policy", "cluster_policies.tf should define cluster policy resource")
+}
+
+func TestClustersTfHasRequiredResources(t *testing.T) {
+	t.Parallel()
+
+	clustersFile, err := os.ReadFile("../clusters.tf")
+	require.NoError(t, err)
+
+	content := string(clustersFile)
+
+	// Should contain cluster resource
+	assert.Contains(t, content, "databricks_cluster", "clusters.tf should define databricks cluster resource")
 }
 
 func TestSecretScopesTfHasRequiredResources(t *testing.T) {

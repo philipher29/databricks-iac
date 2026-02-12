@@ -139,6 +139,12 @@ variable "defaults" {
   default     = {}
 }
 
+variable "permission_model" {
+  description = "Built-in stage-based permission concept for Databricks groups (DB-Admin-{stage}, DB-Engineers-{stage})."
+  type        = any
+  default     = {}
+}
+
 # ---------------------------------------------------------------------------------------------------------------------
 # ENTRA ID GROUPS
 # Maps Azure AD group display names to object IDs (avoids azuread provider)
@@ -203,6 +209,12 @@ variable "cluster_policies" {
   default     = {}
 }
 
+variable "clusters" {
+  description = "Map of Azure Databricks clusters to create. See module for schema."
+  type        = any
+  default     = {}
+}
+
 variable "secret_scopes" {
   description = "Map of secret scopes to create (Databricks-backed or Key Vault-backed). See module for schema."
   type        = any
@@ -240,7 +252,7 @@ variable "crossplane_sp_display_name" {
 variable "crossplane_sp_groups" {
   description = "Databricks group keys to add Crossplane SP to"
   type        = list(string)
-  default     = ["platform_admins"]
+  default     = ["db_admins"]
 }
 
 # ---------------------------------------------------------------------------------------------------------------------

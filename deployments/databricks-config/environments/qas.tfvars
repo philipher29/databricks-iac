@@ -20,11 +20,11 @@ storage_credentials = {
     comment = "QAS storage credential"
     grants = [
       {
-        principal  = "Data Engineers"
+        principal  = "DB-Engineers-qas"
         privileges = ["READ_FILES", "WRITE_FILES", "CREATE_EXTERNAL_TABLE"]
       },
       {
-        principal  = "Data Scientists"
+        principal  = "DB-Engineers-qas"
         privileges = ["READ_FILES"]
       }
     ]
@@ -42,7 +42,7 @@ external_locations = {
     comment         = "QAS landing zone"
     grants = [
       {
-        principal  = "Data Engineers"
+        principal  = "DB-Engineers-qas"
         privileges = ["READ_FILES", "WRITE_FILES", "CREATE_EXTERNAL_TABLE"]
       }
     ]
@@ -54,7 +54,7 @@ external_locations = {
       subpath      = "/volumes/files"
       comment      = "Landing zone for file uploads"
       grants = [
-        { principal = "Data Engineers", privileges = ["READ_VOLUME", "WRITE_VOLUME"] }
+        { principal = "DB-Engineers-qas", privileges = ["READ_VOLUME", "WRITE_VOLUME"] }
       ]
     }
   }
@@ -64,11 +64,11 @@ external_locations = {
     comment         = "QAS processed data"
     grants = [
       {
-        principal  = "Data Engineers"
+        principal  = "DB-Engineers-qas"
         privileges = ["READ_FILES", "WRITE_FILES"]
       },
       {
-        principal  = "Data Scientists"
+        principal  = "DB-Engineers-qas"
         privileges = ["READ_FILES", "CREATE_EXTERNAL_TABLE"]
       }
     ]
@@ -80,11 +80,11 @@ external_locations = {
     read_only       = false
     grants = [
       {
-        principal  = "Data Engineers"
+        principal  = "DB-Engineers-qas"
         privileges = ["READ_FILES", "WRITE_FILES"]
       },
       {
-        principal  = "Data Analysts"
+        principal  = "DB-Engineers-qas"
         privileges = ["READ_FILES"]
       }
     ]
@@ -100,15 +100,15 @@ catalogs = {
     comment = "QAS analytics catalog"
     grants = [
       {
-        principal  = "Data Engineers"
+        principal  = "DB-Engineers-qas"
         privileges = ["ALL_PRIVILEGES"]
       },
       {
-        principal  = "Data Scientists"
+        principal  = "DB-Engineers-qas"
         privileges = ["USE_CATALOG", "USE_SCHEMA", "SELECT", "MODIFY"]
       },
       {
-        principal  = "Data Analysts"
+        principal  = "DB-Engineers-qas"
         privileges = ["USE_CATALOG", "USE_SCHEMA", "SELECT"]
       }
     ]
@@ -116,21 +116,21 @@ catalogs = {
       bronze = {
         comment = "Raw ingested data"
         grants = [
-          { principal = "Data Engineers", privileges = ["ALL_PRIVILEGES"] }
+          { principal = "DB-Engineers-qas", privileges = ["ALL_PRIVILEGES"] }
         ]
       }
       silver = {
         comment = "Cleansed and transformed data"
         grants = [
-          { principal = "Data Engineers", privileges = ["ALL_PRIVILEGES"] },
-          { principal = "Data Scientists", privileges = ["USE_SCHEMA", "SELECT", "MODIFY"] }
+          { principal = "DB-Engineers-qas", privileges = ["ALL_PRIVILEGES"] },
+          { principal = "DB-Engineers-qas", privileges = ["USE_SCHEMA", "SELECT", "MODIFY"] }
         ]
       }
       gold = {
         comment = "Business-ready aggregated data"
         grants = [
-          { principal = "Data Engineers", privileges = ["ALL_PRIVILEGES"] },
-          { principal = "Data Analysts", privileges = ["USE_SCHEMA", "SELECT"] }
+          { principal = "DB-Engineers-qas", privileges = ["ALL_PRIVILEGES"] },
+          { principal = "DB-Engineers-qas", privileges = ["USE_SCHEMA", "SELECT"] }
         ]
       }
     }
@@ -143,6 +143,12 @@ catalogs = {
 
 # No managed volumes in QAS - EXTERNAL volumes moved to external_locations above
 volumes = {}
+
+# ---------------------------------------------------------------------------------------------------------------------
+# CLUSTERS (optional Azure Databricks workspace compute)
+# ---------------------------------------------------------------------------------------------------------------------
+
+clusters = {}
 
 # ---------------------------------------------------------------------------------------------------------------------
 # SECRET SCOPES (Key Vault backed in QAS)
@@ -158,8 +164,8 @@ secret_scopes = {
     keyvault_name = "kv-databricks-qas"
     keyvault_rg   = "rg-databricks-qas" # Optional, defaults to resource_group_name
     acls = [
-      { principal = "Data Engineers", permission = "READ" },
-      { principal = "Platform Admins", permission = "MANAGE" }
+      { principal = "DB-Engineers-qas", permission = "READ" },
+      { principal = "DB-Admin-qas", permission = "MANAGE" }
     ]
   }
 }

@@ -18,14 +18,14 @@ unity_catalog_metastore_id = null # Set to your production metastore ID
 storage_credentials = {
   prod_storage = {
     comment = "Production storage credential"
-    owner   = "Platform Admins"
+    owner   = "DB-Admin-prod"
     grants = [
       {
-        principal  = "Data Engineers"
+        principal  = "DB-Engineers-prod"
         privileges = ["READ_FILES", "WRITE_FILES", "CREATE_EXTERNAL_TABLE"]
       },
       {
-        principal  = "Data Scientists"
+        principal  = "DB-Engineers-prod"
         privileges = ["READ_FILES"]
       }
     ]
@@ -41,10 +41,10 @@ external_locations = {
     url             = "abfss://landing@stproddatabricks.dfs.core.windows.net/"
     credential_name = "prod_storage"
     comment         = "Production landing zone - ingestion only"
-    owner           = "Platform Admins"
+    owner           = "DB-Admin-prod"
     grants = [
       {
-        principal  = "Data Engineers"
+        principal  = "DB-Engineers-prod"
         privileges = ["READ_FILES", "WRITE_FILES", "CREATE_EXTERNAL_TABLE"]
       }
     ]
@@ -55,9 +55,9 @@ external_locations = {
       name         = "prod_landing_files"
       subpath      = "/volumes/files"
       comment      = "Production file landing zone"
-      owner        = "Data Engineers"
+      owner        = "DB-Engineers-prod"
       grants = [
-        { principal = "Data Engineers", privileges = ["READ_VOLUME", "WRITE_VOLUME"] }
+        { principal = "DB-Engineers-prod", privileges = ["READ_VOLUME", "WRITE_VOLUME"] }
       ]
     }
   }
@@ -65,14 +65,14 @@ external_locations = {
     url             = "abfss://processed@stproddatabricks.dfs.core.windows.net/"
     credential_name = "prod_storage"
     comment         = "Production processed data"
-    owner           = "Platform Admins"
+    owner           = "DB-Admin-prod"
     grants = [
       {
-        principal  = "Data Engineers"
+        principal  = "DB-Engineers-prod"
         privileges = ["READ_FILES", "WRITE_FILES"]
       },
       {
-        principal  = "Data Scientists"
+        principal  = "DB-Engineers-prod"
         privileges = ["READ_FILES", "CREATE_EXTERNAL_TABLE"]
       }
     ]
@@ -81,14 +81,14 @@ external_locations = {
     url             = "abfss://curated@stproddatabricks.dfs.core.windows.net/"
     credential_name = "prod_storage"
     comment         = "Production curated data - business consumption"
-    owner           = "Platform Admins"
+    owner           = "DB-Admin-prod"
     grants = [
       {
-        principal  = "Data Engineers"
+        principal  = "DB-Engineers-prod"
         privileges = ["READ_FILES", "WRITE_FILES"]
       },
       {
-        principal  = "Data Analysts"
+        principal  = "DB-Engineers-prod"
         privileges = ["READ_FILES"]
       }
     ]
@@ -99,10 +99,10 @@ external_locations = {
       name         = "prod_reports"
       subpath      = "/volumes/reports"
       comment      = "Production report exports"
-      owner        = "Data Engineers"
+      owner        = "DB-Engineers-prod"
       grants = [
-        { principal = "Data Engineers", privileges = ["READ_VOLUME", "WRITE_VOLUME"] },
-        { principal = "Data Analysts", privileges = ["READ_VOLUME"] }
+        { principal = "DB-Engineers-prod", privileges = ["READ_VOLUME", "WRITE_VOLUME"] },
+        { principal = "DB-Engineers-prod", privileges = ["READ_VOLUME"] }
       ]
     }
   }
@@ -111,10 +111,10 @@ external_locations = {
     credential_name = "prod_storage"
     comment         = "Production archive - long-term storage"
     read_only       = true
-    owner           = "Platform Admins"
+    owner           = "DB-Admin-prod"
     grants = [
       {
-        principal  = "Data Engineers"
+        principal  = "DB-Engineers-prod"
         privileges = ["READ_FILES"]
       }
     ]
@@ -128,57 +128,57 @@ external_locations = {
 catalogs = {
   prod_analytics = {
     comment        = "Production analytics catalog"
-    owner          = "Platform Admins"
+    owner          = "DB-Admin-prod"
     isolation_mode = "OPEN"
     grants = [
       {
-        principal  = "Platform Admins"
+        principal  = "DB-Admin-prod"
         privileges = ["ALL_PRIVILEGES"]
       },
       {
-        principal  = "Data Engineers"
+        principal  = "DB-Engineers-prod"
         privileges = ["USE_CATALOG", "CREATE_SCHEMA"]
       },
       {
-        principal  = "Data Scientists"
+        principal  = "DB-Engineers-prod"
         privileges = ["USE_CATALOG"]
       },
       {
-        principal  = "Data Analysts"
+        principal  = "DB-Engineers-prod"
         privileges = ["USE_CATALOG"]
       }
     ]
     schemas = {
       bronze = {
         comment = "Raw ingested data - immutable"
-        owner   = "Data Engineers"
+        owner   = "DB-Engineers-prod"
         grants = [
-          { principal = "Data Engineers", privileges = ["ALL_PRIVILEGES"] }
+          { principal = "DB-Engineers-prod", privileges = ["ALL_PRIVILEGES"] }
         ]
       }
       silver = {
         comment = "Cleansed and transformed data"
-        owner   = "Data Engineers"
+        owner   = "DB-Engineers-prod"
         grants = [
-          { principal = "Data Engineers", privileges = ["ALL_PRIVILEGES"] },
-          { principal = "Data Scientists", privileges = ["USE_SCHEMA", "SELECT", "MODIFY", "CREATE_TABLE"] }
+          { principal = "DB-Engineers-prod", privileges = ["ALL_PRIVILEGES"] },
+          { principal = "DB-Engineers-prod", privileges = ["USE_SCHEMA", "SELECT", "MODIFY", "CREATE_TABLE"] }
         ]
       }
       gold = {
         comment = "Business-ready aggregated data"
-        owner   = "Data Engineers"
+        owner   = "DB-Engineers-prod"
         grants = [
-          { principal = "Data Engineers", privileges = ["ALL_PRIVILEGES"] },
-          { principal = "Data Scientists", privileges = ["USE_SCHEMA", "SELECT"] },
-          { principal = "Data Analysts", privileges = ["USE_SCHEMA", "SELECT"] }
+          { principal = "DB-Engineers-prod", privileges = ["ALL_PRIVILEGES"] },
+          { principal = "DB-Engineers-prod", privileges = ["USE_SCHEMA", "SELECT"] },
+          { principal = "DB-Engineers-prod", privileges = ["USE_SCHEMA", "SELECT"] }
         ]
       }
       ml_features = {
         comment = "ML feature store"
-        owner   = "Data Scientists"
+        owner   = "DB-Engineers-prod"
         grants = [
-          { principal = "Data Scientists", privileges = ["ALL_PRIVILEGES"] },
-          { principal = "Data Engineers", privileges = ["USE_SCHEMA", "SELECT"] }
+          { principal = "DB-Engineers-prod", privileges = ["ALL_PRIVILEGES"] },
+          { principal = "DB-Engineers-prod", privileges = ["USE_SCHEMA", "SELECT"] }
         ]
       }
     }
@@ -195,13 +195,19 @@ volumes = {
     catalog_name = "prod_analytics"
     schema_name  = "ml_features"
     comment      = "Production ML model artifacts"
-    owner        = "Data Scientists"
+    owner        = "DB-Engineers-prod"
     grants = [
-      { principal = "Data Scientists", privileges = ["READ_VOLUME", "WRITE_VOLUME"] },
-      { principal = "Data Engineers", privileges = ["READ_VOLUME"] }
+      { principal = "DB-Engineers-prod", privileges = ["READ_VOLUME", "WRITE_VOLUME"] },
+      { principal = "DB-Engineers-prod", privileges = ["READ_VOLUME"] }
     ]
   }
 }
+
+# ---------------------------------------------------------------------------------------------------------------------
+# CLUSTERS (optional Azure Databricks workspace compute)
+# ---------------------------------------------------------------------------------------------------------------------
+
+clusters = {}
 
 # ---------------------------------------------------------------------------------------------------------------------
 # SECRET SCOPES (Key Vault backed in production)
@@ -214,9 +220,9 @@ secret_scopes = {
     keyvault_name = "kv-databricks-prod"
     keyvault_rg   = "rg-databricks-prod" # Optional, defaults to resource_group_name
     acls = [
-      { principal = "Data Engineers", permission = "READ" },
-      { principal = "Data Scientists", permission = "READ" },
-      { principal = "Platform Admins", permission = "MANAGE" }
+      { principal = "DB-Engineers-prod", permission = "READ" },
+      { principal = "DB-Engineers-prod", permission = "READ" },
+      { principal = "DB-Admin-prod", permission = "MANAGE" }
     ]
   }
   prod_service_connections = {
@@ -224,7 +230,7 @@ secret_scopes = {
     keyvault_name = "kv-databricks-svc-prod"
     keyvault_rg   = "rg-databricks-prod" # Optional, defaults to resource_group_name
     acls = [
-      { principal = "Platform Admins", permission = "MANAGE" }
+      { principal = "DB-Admin-prod", permission = "MANAGE" }
     ]
   }
 }

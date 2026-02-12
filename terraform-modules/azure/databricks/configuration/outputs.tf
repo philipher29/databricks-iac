@@ -105,16 +105,13 @@ output "volumes" {
 # ---------------------------------------------------------------------------------------------------------------------
 
 output "clusters" {
-  description = "Map of created Databricks clusters"
+  description = "Map of created clusters"
   value = {
     for key, cluster in databricks_cluster.this : key => {
-      cluster_id          = cluster.cluster_id
-      cluster_name        = cluster.cluster_name
-      spark_version       = cluster.spark_version
-      node_type_id        = cluster.node_type_id
-      driver_node_type_id = cluster.driver_node_type_id
-      state               = try(cluster.state, "UNKNOWN")
-      state_message       = try(cluster.state_message, "")
+      id            = try(cluster.cluster_id, cluster.id)
+      cluster_name  = cluster.cluster_name
+      spark_version = cluster.spark_version
+      node_type_id  = cluster.node_type_id
     }
   }
 }
@@ -184,4 +181,12 @@ output "service_principals" {
       display_name   = sp.display_name
     }
   }
+}
+
+output "permission_groups" {
+  description = "Default stage-based permission groups created by the built-in permission model."
+  value = local.permission_model.enabled ? {
+    admin_group_name    = local.admin_group_display_name
+    engineer_group_name = local.engineer_group_display_name
+  } : null
 }
