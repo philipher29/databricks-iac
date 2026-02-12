@@ -81,8 +81,9 @@ module "databricks_config" {
   unity_catalog_metastore_id = var.unity_catalog_metastore_id
 
   # Defaults and naming configuration
-  defaults         = var.defaults
-  permission_model = var.permission_model
+  defaults               = var.defaults
+  permission_model       = var.permission_model
+  default_catalog_schema = var.default_catalog_schema
   naming = {
     environment = var.environment
   }

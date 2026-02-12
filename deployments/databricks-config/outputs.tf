@@ -61,3 +61,8 @@ output "permission_groups" {
   description = "Built-in stage-based permission groups"
   value       = module.databricks_config.permission_groups
 }
+
+output "default_catalog_schema" {
+  description = "Effective existing default catalog/schema configuration"
+  value       = module.databricks_config.default_catalog_schema
+}

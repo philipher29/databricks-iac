@@ -190,3 +190,12 @@ output "permission_groups" {
     engineer_group_name = local.engineer_group_display_name
   } : null
 }
+
+output "default_catalog_schema" {
+  description = "Effective default catalog/schema configuration used for existing Databricks catalog/schema targeting."
+  value = {
+    enabled      = local.default_catalog_schema.enabled
+    catalog_name = local.default_catalog_schema.catalog_name
+    schema_name  = local.default_catalog_schema.schema_name
+  }
+}

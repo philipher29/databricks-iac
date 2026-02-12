@@ -132,6 +132,14 @@ locals {
 # ---------------------------------------------------------------------------------------------------------------------
 
 locals {
+  default_catalog_schema = merge({
+    enabled        = false
+    catalog_name   = "hive_metastore"
+    schema_name    = "default"
+    catalog_grants = []
+    schema_grants  = []
+  }, var.default_catalog_schema)
+
   catalog_schemas = flatten([
     for catalog_key, catalog in var.catalogs : [
       for schema_key, schema in coalesce(catalog.schemas, {}) : {
@@ -154,8 +162,8 @@ locals {
     for loc_key, loc in var.external_locations : loc_key => {
       location_key     = loc_key
       name             = coalesce(try(loc.volume.name, null), loc_key)
-      catalog_name     = loc.volume.catalog_name
-      schema_name      = loc.volume.schema_name
+      catalog_name     = coalesce(try(loc.volume.catalog_name, null), local.default_catalog_schema.enabled ? local.default_catalog_schema.catalog_name : null)
+      schema_name      = coalesce(try(loc.volume.schema_name, null), local.default_catalog_schema.enabled ? local.default_catalog_schema.schema_name : null)
       storage_location = try(loc.volume.subpath, null) != null ? "${trimsuffix(loc.url, "/")}${loc.volume.subpath}" : loc.url
       comment          = try(loc.volume.comment, null)
       owner            = coalesce(try(loc.volume.owner, null), loc.owner)
@@ -222,4 +230,12 @@ locals {
       ]
     ]) : acl.key => acl
   }
+
+  default_catalog_grants = local.default_catalog_schema.enabled && length(local.default_catalog_schema.catalog_grants) > 0 ? {
+    default = local.default_catalog_schema.catalog_grants
+  } : {}
+
+  default_schema_grants = local.default_catalog_schema.enabled && length(local.default_catalog_schema.schema_grants) > 0 ? {
+    default = local.default_catalog_schema.schema_grants
+  } : {}
 }

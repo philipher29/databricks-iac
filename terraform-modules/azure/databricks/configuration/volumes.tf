@@ -7,13 +7,24 @@ resource "databricks_volume" "managed" {
   for_each = var.volumes
 
   name         = each.key
-  catalog_name = each.value.catalog_name
-  schema_name  = each.value.schema_name
+  catalog_name = coalesce(each.value.catalog_name, local.default_catalog_schema.enabled ? local.default_catalog_schema.catalog_name : null)
+  schema_name  = coalesce(each.value.schema_name, local.default_catalog_schema.enabled ? local.default_catalog_schema.schema_name : null)
   volume_type  = "MANAGED"
   comment      = each.value.comment
   owner        = each.value.owner
 
   depends_on = [databricks_schema.this]
+
+  lifecycle {
+    precondition {
+      condition     = each.value.catalog_name != null || local.default_catalog_schema.enabled
+      error_message = "Managed volume '${each.key}' requires catalog_name unless default_catalog_schema.enabled=true."
+    }
+    precondition {
+      condition     = each.value.schema_name != null || local.default_catalog_schema.enabled
+      error_message = "Managed volume '${each.key}' requires schema_name unless default_catalog_schema.enabled=true."
+    }
+  }
 }
 
 resource "databricks_grants" "managed_volumes" {
@@ -61,6 +72,17 @@ resource "databricks_volume" "external" {
     databricks_schema.this,
     databricks_external_location.this
   ]
+
+  lifecycle {
+    precondition {
+      condition     = each.value.catalog_name != null
+      error_message = "External volume '${each.key}' requires catalog_name in external_locations.volume or default_catalog_schema.enabled=true."
+    }
+    precondition {
+      condition     = each.value.schema_name != null
+      error_message = "External volume '${each.key}' requires schema_name in external_locations.volume or default_catalog_schema.enabled=true."
+    }
+  }
 }
 
 resource "databricks_grants" "external_volumes" {

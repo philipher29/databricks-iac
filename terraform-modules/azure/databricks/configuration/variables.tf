@@ -23,6 +23,24 @@ variable "unity_catalog_metastore_id" {
   default     = null
 }
 
+variable "default_catalog_schema" {
+  description = "Use an existing default catalog/schema (for example hive_metastore.default) instead of creating dedicated catalog/schema resources."
+  type = object({
+    enabled      = optional(bool, false)
+    catalog_name = optional(string, "hive_metastore")
+    schema_name  = optional(string, "default")
+    catalog_grants = optional(list(object({
+      principal  = string
+      privileges = list(string)
+    })), [])
+    schema_grants = optional(list(object({
+      principal  = string
+      privileges = list(string)
+    })), [])
+  })
+  default = {}
+}
+
 # ---------------------------------------------------------------------------------------------------------------------
 # ENTRA ID GROUP MAPPING
 # Provides Azure AD group object IDs without requiring azuread provider permissions
@@ -122,8 +140,8 @@ variable "external_locations" {
     })), [])
     # Optional: Create an EXTERNAL volume at this location
     volume = optional(object({
-      catalog_name = string
-      schema_name  = string
+      catalog_name = optional(string)
+      schema_name  = optional(string)
       name         = optional(string) # Defaults to external location key
       subpath      = optional(string) # Subpath under the location URL (e.g., "/volumes/files")
       comment      = optional(string)
@@ -172,8 +190,8 @@ variable "catalogs" {
 variable "volumes" {
   description = "Map of Unity Catalog MANAGED volumes to create. For EXTERNAL volumes, use the 'volume' block in external_locations instead."
   type = map(object({
-    catalog_name = string
-    schema_name  = string
+    catalog_name = optional(string)
+    schema_name  = optional(string)
     comment      = optional(string)
     owner        = optional(string)
     grants = optional(list(object({

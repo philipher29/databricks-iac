@@ -15,6 +15,19 @@ permission_model = {
   enabled = true
 }
 
+# Optional: target existing Azure Databricks default catalog/schema
+# default_catalog_schema = {
+#   enabled      = true
+#   catalog_name = "hive_metastore"
+#   schema_name  = "default"
+#   catalog_grants = [
+#     { principal = "DB-Engineers-dev", privileges = ["USE_CATALOG"] }
+#   ]
+#   schema_grants = [
+#     { principal = "DB-Engineers-dev", privileges = ["USE_SCHEMA", "SELECT"] }
+#   ]
+# }
+
 # ---------------------------------------------------------------------------------------------------------------------
 # ENTRA ID GROUPS MAPPING
 # Maps Azure AD group display names to object IDs (avoids azuread provider)

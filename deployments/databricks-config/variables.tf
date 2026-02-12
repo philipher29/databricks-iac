@@ -145,6 +145,12 @@ variable "permission_model" {
   default     = {}
 }
 
+variable "default_catalog_schema" {
+  description = "Use existing default Databricks catalog/schema (for example hive_metastore.default) instead of creating custom catalog/schema."
+  type        = any
+  default     = {}
+}
+
 # ---------------------------------------------------------------------------------------------------------------------
 # ENTRA ID GROUPS
 # Maps Azure AD group display names to object IDs (avoids azuread provider)

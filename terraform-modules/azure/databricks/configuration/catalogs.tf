@@ -84,3 +84,53 @@ resource "databricks_grants" "schemas" {
     }
   }
 }
+
+resource "databricks_grants" "default_catalog" {
+  for_each = local.default_catalog_grants
+
+  catalog = local.default_catalog_schema.catalog_name
+
+  dynamic "grant" {
+    for_each = each.value
+    content {
+      principal  = grant.value.principal
+      privileges = grant.value.privileges
+    }
+  }
+
+  lifecycle {
+    precondition {
+      condition = alltrue(flatten([
+        for grant_item in each.value : [
+          for priv in grant_item.privileges : contains(local.valid_privileges.catalog, priv)
+        ]
+      ]))
+      error_message = "Invalid privilege for default catalog. Valid values: ${join(", ", local.valid_privileges.catalog)}"
+    }
+  }
+}
+
+resource "databricks_grants" "default_schema" {
+  for_each = local.default_schema_grants
+
+  schema = "${local.default_catalog_schema.catalog_name}.${local.default_catalog_schema.schema_name}"
+
+  dynamic "grant" {
+    for_each = each.value
+    content {
+      principal  = grant.value.principal
+      privileges = grant.value.privileges
+    }
+  }
+
+  lifecycle {
+    precondition {
+      condition = alltrue(flatten([
+        for grant_item in each.value : [
+          for priv in grant_item.privileges : contains(local.valid_privileges.schema, priv)
+        ]
+      ]))
+      error_message = "Invalid privilege for default schema. Valid values: ${join(", ", local.valid_privileges.schema)}"
+    }
+  }
+}
